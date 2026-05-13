@@ -128,6 +128,8 @@
   <button class="btn btn-green" onclick="loadOptions()">查詢</button>
   <button class="btn btn-ghost" onclick="loadDefaults()">預設</button>
   <button class="btn btn-ghost" onclick="toggleGuide()">💡</button>
+  <button class="btn btn-ghost" id="optAutoBtn" onclick="toggleOptAutoSync()">⏱ 自動</button>
+  <span id="optAutoCountdown" style="font-size:.68rem;color:var(--dim);display:none;"></span>
 </div>
 
 <!-- guide card -->
@@ -144,7 +146,8 @@
 </div>
 
 <div class="bottombar">
-  <span class="note">IV Rank / Pctl 以HV近似 · 資料延遲約15分鐘</span>
+  <span class="note">IV Rank / Pctl 以HV近似</span>
+  <span id="mOptSrc" style="display:none;font-size:.68rem;font-weight:600;padding:.1rem .4rem;border-radius:4px;"></span>
 </div>
 
 <script>
@@ -240,10 +243,54 @@ async function fetchAndRender(url) {
     const data = await res.json();
     const rows = data.results || [data];
     document.getElementById("main").innerHTML = rows.map(renderCard).join("");
+    updateOptSrc(rows);
   } catch(e) {
     document.getElementById("main").innerHTML =
       `<div class="error-card">載入失敗：${e.message}</div>`;
   }
+}
+
+function updateOptSrc(rows) {
+  const el = document.getElementById("mOptSrc");
+  if (!el || !rows) return;
+  const valid = rows.filter(r => !r.error);
+  const hasAlpaca = valid.some(r => r.price_source === "Alpaca");
+  const hasYahoo  = valid.some(r => r.price_source !== "Alpaca");
+  let label, bg, color;
+  if (hasAlpaca) { label="💹 價格 Alpaca IEX (即時)"; bg="#0d2a1a"; color="#3fb950"; }
+  else           { label="💹 Yahoo Finance (15分鐘延遲)"; bg="#1c2128"; color="#e3b341"; }
+  el.textContent = label;
+  el.style.cssText = `display:inline;background:${bg};color:${color};padding:.1rem .4rem;border-radius:4px;font-size:.68rem;font-weight:600;`;
+}
+
+/* ── auto-sync 60s ── */
+let _optAutoTick=null,_optAutoSecs=60,_optAutoOn=false;
+const OPT_INTERVAL=60;
+function toggleOptAutoSync(){ _optAutoOn?_stopOptAuto():_startOptAuto(); }
+function _startOptAuto(){
+  _optAutoOn=true; _optAutoSecs=OPT_INTERVAL; _setOptAutoBtn(true);
+  _optAutoTick=setInterval(()=>{
+    _optAutoSecs--;
+    const cd=document.getElementById("optAutoCountdown");
+    if(cd){cd.style.display="inline";cd.textContent=`${_optAutoSecs}s`;}
+    if(_optAutoSecs<=0){
+      _optAutoSecs=OPT_INTERVAL;
+      const raw=document.getElementById("symInput").value.trim();
+      raw?fetchAndRender(`/options/data?symbols=${encodeURIComponent(raw)}`):fetchAndRender("/options/data");
+    }
+  },1000);
+}
+function _stopOptAuto(){
+  if(_optAutoTick){clearInterval(_optAutoTick);_optAutoTick=null;}
+  _optAutoOn=false; _setOptAutoBtn(false);
+  const cd=document.getElementById("optAutoCountdown");
+  if(cd)cd.style.display="none";
+}
+function _setOptAutoBtn(on){
+  const btn=document.getElementById("optAutoBtn");
+  if(!btn)return;
+  btn.textContent=on?"⏱ ON":"⏱ 自動";
+  btn.style.cssText=on?"background:#0d2a1a;color:#3fb950;border:1px solid #238636;":"";
 }
 
 function loadOptions() {

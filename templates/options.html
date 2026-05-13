@@ -128,9 +128,12 @@
     <input id="symInput" type="text" placeholder="輸入代碼（多個以空格分隔，如 AAPL NVDA）" autocomplete="off"/>
     <button class="btn btn-green" id="searchBtn" onclick="loadOptions()">查詢</button>
     <button class="btn btn-ghost" onclick="loadDefaults()">預設清單</button>
+    <button class="btn btn-ghost" id="optAutoBtn" onclick="toggleOptAutoSync()" title="每60秒自動重新整理">⏱ 自動</button>
+    <span id="optAutoCountdown" style="font-size:0.75rem;color:var(--dim);display:none;"></span>
   </div>
   <span class="note">※ IV Rank / Pctl 以歷史波動率近似（HV基礎）；延遲約15分鐘</span>
   <button class="btn btn-ghost" style="font-size:0.78rem;" onclick="toggleGuide()">💡 指標說明</button>
+  <span id="optSourceBadge" style="display:none;font-size:0.75rem;font-weight:600;padding:0.2rem 0.6rem;border-radius:5px;white-space:nowrap;"></span>
   <span class="fetch-info" id="fetchInfo"></span>
 </div>
 
@@ -270,6 +273,7 @@ async function fetchAndRender(url) {
     document.getElementById("optTable").style.display = "table";
     document.getElementById("fetchInfo").textContent =
       `共 ${rows.filter(r=>!r.error).length} 筆 · ${new Date().toLocaleTimeString("zh-TW")}`;
+    updateOptSourceBadge(rows);
   } catch(e) {
     document.getElementById("optBody").innerHTML =
       `<tr><td colspan="11" style="color:var(--red);padding:2rem;text-align:center">載入失敗：${e.message}</td></tr>`;
@@ -277,6 +281,70 @@ async function fetchAndRender(url) {
   } finally {
     document.getElementById("spinner").style.display = "none";
   }
+}
+
+function updateOptSourceBadge(rows) {
+  const el = document.getElementById("optSourceBadge");
+  if (!el || !rows) return;
+  const valid = rows.filter(r => !r.error);
+  const hasAlpaca = valid.some(r => r.price_source === "Alpaca");
+  const hasYahoo  = valid.some(r => r.price_source !== "Alpaca");
+  let label, bg, color, border;
+  if (hasAlpaca && hasYahoo) {
+    label = "💹 價格：Alpaca IEX + Yahoo　｜　選擇權：Yahoo Finance";
+    bg = "#0d2a1a"; color = "#3fb950"; border = "#238636";
+  } else if (hasAlpaca) {
+    label = "💹 價格：Alpaca IEX (即時)　｜　選擇權：Yahoo Finance";
+    bg = "#0d2a1a"; color = "#3fb950"; border = "#238636";
+  } else {
+    label = "💹 全部來源：Yahoo Finance (延遲約15分鐘)";
+    bg = "#1c2128"; color = "#e3b341"; border = "#9e6a03";
+  }
+  el.textContent = label;
+  el.style.cssText = `display:inline;background:${bg};color:${color};border:1px solid ${border};
+    font-size:0.75rem;font-weight:600;padding:0.2rem 0.6rem;border-radius:5px;white-space:nowrap;`;
+}
+
+/* ── options auto-sync (60s) ── */
+let _optAutoTick  = null;
+let _optAutoSecs  = 60;
+let _optAutoOn    = false;
+const OPT_INTERVAL = 60;
+
+function toggleOptAutoSync() {
+  _optAutoOn ? _stopOptAuto() : _startOptAuto();
+}
+function _startOptAuto() {
+  _optAutoOn   = true;
+  _optAutoSecs = OPT_INTERVAL;
+  _setOptAutoBtn(true);
+  _optAutoTick = setInterval(() => {
+    _optAutoSecs--;
+    const cd = document.getElementById("optAutoCountdown");
+    if (cd) { cd.style.display = "inline"; cd.textContent = `${_optAutoSecs}s`; }
+    if (_optAutoSecs <= 0) {
+      _optAutoSecs = OPT_INTERVAL;
+      // re-run the last query (defaults if input is empty)
+      const raw = document.getElementById("symInput").value.trim();
+      raw ? fetchAndRender(`/options/data?symbols=${encodeURIComponent(raw)}`)
+          : fetchAndRender("/options/data");
+    }
+  }, 1000);
+}
+function _stopOptAuto() {
+  if (_optAutoTick) { clearInterval(_optAutoTick); _optAutoTick = null; }
+  _optAutoOn = false;
+  _setOptAutoBtn(false);
+  const cd = document.getElementById("optAutoCountdown");
+  if (cd) cd.style.display = "none";
+}
+function _setOptAutoBtn(on) {
+  const btn = document.getElementById("optAutoBtn");
+  if (!btn) return;
+  btn.textContent = on ? "⏱ 自動 ON" : "⏱ 自動";
+  btn.style.cssText = on
+    ? "background:#0d2a1a;color:#3fb950;border:1px solid #238636;"
+    : "";
 }
 
 function loadOptions() {

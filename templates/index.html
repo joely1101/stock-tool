@@ -548,6 +548,19 @@
     .rev-neg    { color: var(--red);   font-weight: 600; }
     .na         { color: var(--dim); }
     .earn-date  { color: #79c0ff; font-size: 0.8rem; }
+    .src-badge {
+      display: inline-block; font-size: 0.62rem; font-weight: 700;
+      padding: 0.05rem 0.35rem; border-radius: 3px;
+      letter-spacing: 0.04em; vertical-align: middle;
+    }
+    .src-alpaca { background: #0d2a1a; color: #3fb950; border: 1px solid #23863666; }
+    .src-yahoo  { background: #1c2128; color: #8b949e; border: 1px solid #30363d; }
+    html.theme-white .src-alpaca { background: #dafbe1; border-color: #2da44e88; }
+    html.theme-white .src-yahoo  { background: #eaeef2; border-color: #d0d7de; }
+    html.theme-lightblue .src-alpaca { background: #d0f0da; border-color: #2da44e88; }
+    html.theme-lightblue .src-yahoo  { background: #c2dff0; border-color: #8abcd8; }
+    html.theme-lightyellow .src-alpaca { background: #b3e4bf; border-color: #2da44e88; }
+    html.theme-lightyellow .src-yahoo  { background: #fdf7d7; border-color: #f3eac1; }
     .buy-hi     { color: var(--green); font-weight: 700; }
     .buy-mid    { color: var(--yellow); }
     .buy-lo     { color: var(--red); }
@@ -825,6 +838,11 @@
         <h2 id="activeProfileName">—</h2>
         <span class="last-sync-badge" id="lastSyncBadge"></span>
         <button class="btn btn-sync" id="syncBtn" onclick="syncProfile()">⟳ 同步行情</button>
+        <button class="btn btn-ghost" id="autoSyncBtn" onclick="toggleAutoSync()"
+                title="每30秒自動同步">⏱ 自動</button>
+        <span id="autoSyncCountdown" style="font-size:0.72rem;color:var(--dim);display:none;"></span>
+        <span id="sourceBadge" style="display:none; font-size:0.75rem; font-weight:600;
+          padding:0.2rem 0.6rem; border-radius:5px; white-space:nowrap;"></span>
         <button class="btn btn-ghost" id="exportBtn" onclick="exportCSV()" title="匯出目前資料為 CSV">⬇ 匯出 CSV</button>
         <button class="btn btn-danger" id="deleteProfileBtn" onclick="confirmDeleteProfile()">刪除組合</button>
         <button class="profile-fold-btn" id="profileFoldBtn" onclick="toggleProfileHeader()" title="收合／展開股票清單">▲</button>
@@ -958,6 +976,7 @@ function renderSidebar() {
 
 /* ─── select profile ─────────────────────────────────────── */
 async function selectProfile(name) {
+  stopAutoSync();          // stop any running auto-sync from previous profile
   activeProfile = name;
   renderSidebar();
 
@@ -974,6 +993,7 @@ async function selectProfile(name) {
   updateSyncBadge(data.last_sync);
   if (data.cache && data.cache.length) {
     renderRows(data.cache);
+    updateSourceBadge(data.cache);
   } else {
     document.getElementById("resultBody").innerHTML =
       `<tr><td colspan="14" class="empty-state">尚未同步，請按「同步行情」</td></tr>`;
@@ -1011,6 +1031,7 @@ async function syncProfile() {
     renderSidebar();
     updateSyncBadge(data.last_sync);
     renderRows(data.results);
+    updateSourceBadge(data.results);
   } catch {
     showError("同步失敗，請確認網路連線。");
   } finally {
@@ -1176,6 +1197,7 @@ async function adhocAnalyze() {
   showSpinner(true);
   clearError();
   // deselect profile view when doing ad-hoc lookup
+  stopAutoSync();
   activeProfile = null;
   document.getElementById("profileHeader").classList.remove("visible");
   updateTopbarProfileLabel();
@@ -1416,6 +1438,82 @@ function updateTopbarProfileLabel() {
     label.textContent = "未選擇組合";
     label.classList.add("empty");
   }
+}
+
+/* ─── auto-sync ──────────────────────────────────────────── */
+let _autoSyncTimer    = null;
+let _autoSyncTick     = null;
+let _autoSyncSecs     = 30;
+const AUTO_SYNC_EVERY = 30;   // seconds
+
+function toggleAutoSync() {
+  _autoSyncTimer ? stopAutoSync() : startAutoSync();
+}
+
+function startAutoSync() {
+  if (!activeProfile) return;
+  _autoSyncSecs = AUTO_SYNC_EVERY;
+  _setAutoSyncBtn(true);
+  // countdown ticker (updates every second)
+  _autoSyncTick = setInterval(() => {
+    _autoSyncSecs--;
+    _updateCountdown();
+    if (_autoSyncSecs <= 0) {
+      _autoSyncSecs = AUTO_SYNC_EVERY;
+      syncProfile();
+    }
+  }, 1000);
+  _autoSyncTimer = true;   // flag: running
+  _updateCountdown();
+}
+
+function stopAutoSync() {
+  if (_autoSyncTick) { clearInterval(_autoSyncTick); _autoSyncTick = null; }
+  _autoSyncTimer = null;
+  _setAutoSyncBtn(false);
+  const cd = document.getElementById("autoSyncCountdown");
+  if (cd) cd.style.display = "none";
+}
+
+function _setAutoSyncBtn(on) {
+  const btn = document.getElementById("autoSyncBtn");
+  if (!btn) return;
+  if (on) {
+    btn.textContent = "⏱ 自動 ON";
+    btn.style.cssText = "background:#0d2a1a;color:#3fb950;border:1px solid #238636;";
+  } else {
+    btn.textContent = "⏱ 自動";
+    btn.style.cssText = "";
+  }
+}
+
+function _updateCountdown() {
+  const cd = document.getElementById("autoSyncCountdown");
+  if (!cd) return;
+  cd.style.display = "inline";
+  cd.textContent   = `${_autoSyncSecs}s`;
+}
+
+/* ─── source badge ───────────────────────────────────────── */
+function updateSourceBadge(results) {
+  const el = document.getElementById("sourceBadge");
+  if (!el || !results || !results.length) { el && (el.style.display="none"); return; }
+  const valid = results.filter(r => !r.error);
+  const hasAlpaca = valid.some(r => r.price_source === "Alpaca");
+  const hasYahoo  = valid.some(r => r.price_source !== "Alpaca");
+  let label, bg, color, border;
+  if (hasAlpaca && hasYahoo) {
+    label  = "🟢 Alpaca + Yahoo";
+    bg     = "#0d2a1a"; color = "#3fb950"; border = "#238636";
+  } else if (hasAlpaca) {
+    label  = "🟢 Alpaca IEX (即時)";
+    bg     = "#0d2a1a"; color = "#3fb950"; border = "#238636";
+  } else {
+    label  = "🟡 Yahoo Finance (15分鐘延遲)";
+    bg     = "#1c2128"; color = "#e3b341"; border = "#9e6a03";
+  }
+  el.textContent = label;
+  el.style.cssText += `display:inline;background:${bg};color:${color};border:1px solid ${border};`;
 }
 
 /* ─── sidebar toggle ─────────────────────────────────────── */

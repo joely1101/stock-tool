@@ -469,9 +469,12 @@
     <div class="profile-panel-top">
       <span class="profile-panel-name" id="panelName">—</span>
       <button class="btn btn-sync btn-sm" id="syncBtn" onclick="syncProfile()">⟳ 同步</button>
+      <button class="btn btn-ghost btn-sm" id="autoSyncBtn" onclick="toggleAutoSync()" title="每30秒自動同步">⏱ 自動</button>
+      <span id="autoSyncCountdown" style="font-size:0.68rem;color:var(--dim);display:none;"></span>
       <button class="btn btn-ghost btn-sm" onclick="exportCSV()">⬇ CSV</button>
     </div>
     <div class="sync-time" id="syncTime"></div>
+    <div id="mSrcBadge" style="display:none;padding:0 0.75rem 0.4rem;font-size:0.72rem;font-weight:600;"></div>
     <div class="chip-wrap" id="chipWrap"></div>
     <div class="chip-add-wrap">
       <input id="addStockInput" placeholder="加入股票（如 AAPL）" maxlength="10"
@@ -581,6 +584,7 @@ function renderDrawer() {
 
 /* ── select profile ── */
 async function selectProfile(name) {
+  stopAutoSync();
   activeProfile = name;
   renderDrawer();
   document.getElementById("topProfileLabel").textContent = name;
@@ -593,7 +597,7 @@ async function selectProfile(name) {
   if (data.error) { showError(data.error); return; }
   renderChips(data.stocks);
   document.getElementById("syncTime").textContent = data.last_sync ? `上次同步：${data.last_sync}` : "";
-  if (data.cache && data.cache.length) renderCards(data.cache);
+  if (data.cache && data.cache.length) { renderCards(data.cache); updateSourceBadge(data.cache); }
   else document.getElementById("cardList").innerHTML = `<div class="empty-state">尚未同步，請按「⟳ 同步」</div>`;
 }
 
@@ -618,6 +622,7 @@ async function syncProfile() {
     renderDrawer();
     document.getElementById("syncTime").textContent = `上次同步：${data.last_sync}`;
     renderCards(data.results);
+    updateSourceBadge(data.results);
   } catch { showError("同步失敗"); }
   finally { btn.disabled=false; btn.textContent="⟳ 同步"; showSpinner(false); }
 }
@@ -952,6 +957,57 @@ function esc(s) {
   return String(s).replace(/&/g,"&amp;").replace(/</g,"&lt;")
     .replace(/>/g,"&gt;").replace(/"/g,"&quot;");
 }
+/* ─── auto-sync ── */
+let _autoSyncTimer = null, _autoSyncTick = null, _autoSyncSecs = 30;
+const AUTO_SYNC_EVERY = 30;
+
+function toggleAutoSync() { _autoSyncTimer ? stopAutoSync() : startAutoSync(); }
+
+function startAutoSync() {
+  if (!activeProfile) return;
+  _autoSyncSecs = AUTO_SYNC_EVERY;
+  _setAutoSyncBtn(true);
+  _autoSyncTick = setInterval(() => {
+    _autoSyncSecs--;
+    const cd = document.getElementById("autoSyncCountdown");
+    if (cd) { cd.style.display="inline"; cd.textContent=`${_autoSyncSecs}s`; }
+    if (_autoSyncSecs <= 0) { _autoSyncSecs = AUTO_SYNC_EVERY; syncProfile(); }
+  }, 1000);
+  _autoSyncTimer = true;
+}
+
+function stopAutoSync() {
+  if (_autoSyncTick) { clearInterval(_autoSyncTick); _autoSyncTick = null; }
+  _autoSyncTimer = null;
+  _setAutoSyncBtn(false);
+  const cd = document.getElementById("autoSyncCountdown");
+  if (cd) cd.style.display = "none";
+}
+
+function _setAutoSyncBtn(on) {
+  const btn = document.getElementById("autoSyncBtn");
+  if (!btn) return;
+  btn.textContent = on ? "⏱ ON" : "⏱ 自動";
+  btn.style.cssText = on
+    ? "background:#0d2a1a;color:#3fb950;border:1px solid #238636;"
+    : "";
+}
+
+function updateSourceBadge(results) {
+  const el = document.getElementById("mSrcBadge");
+  if (!el || !results || !results.length) { el && (el.style.display="none"); return; }
+  const valid = results.filter(r => !r.error);
+  const hasAlpaca = valid.some(r => r.price_source === "Alpaca");
+  const hasYahoo  = valid.some(r => r.price_source !== "Alpaca");
+  let label, color;
+  if (hasAlpaca && hasYahoo) { label="🟢 Alpaca + Yahoo"; color="#3fb950"; }
+  else if (hasAlpaca)        { label="🟢 Alpaca IEX (即時)"; color="#3fb950"; }
+  else                       { label="🟡 Yahoo Finance (15分鐘延遲)"; color="#e3b341"; }
+  el.textContent = label;
+  el.style.color = color;
+  el.style.display = "block";
+}
+
 function showSpinner(v) { document.getElementById("spinner").classList.toggle("visible",v); }
 function showError(msg) { const e=document.getElementById("errorMsg"); e.textContent=msg; e.style.display="block"; }
 function clearError() { document.getElementById("errorMsg").style.display="none"; }

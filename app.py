@@ -1,6 +1,8 @@
 import json
 import os
 import re
+import time
+import threading
 from datetime import datetime
 from zoneinfo import ZoneInfo
 from flask import Flask, render_template, request, jsonify
@@ -9,6 +11,62 @@ from market_data  import get_market_overview
 from options_data import get_options_stats, get_options_watchlist, get_dynamic_watchlist
 
 TW_TZ = ZoneInfo("Asia/Taipei")
+
+# ── Simple in-memory cache ────────────────────────────────────────────────────
+
+class SimpleCache:
+    """Thread-safe TTL cache. Keys are strings; values are any JSON-serialisable object."""
+
+    def __init__(self):
+        self._store = {}
+        self._lock  = threading.Lock()
+
+    def get(self, key: str):
+        with self._lock:
+            entry = self._store.get(key)
+            if entry and time.time() - entry["ts"] < entry["ttl"]:
+                return entry["data"]
+            return None
+
+    def set(self, key: str, data, ttl: int = 60):
+        with self._lock:
+            self._store[key] = {"data": data, "ts": time.time(), "ttl": ttl}
+
+    def delete(self, key: str):
+        with self._lock:
+            self._store.pop(key, None)
+
+    def get_or_fetch(self, key: str, fetch_fn, ttl: int = 60):
+        cached = self.get(key)
+        if cached is not None:
+            return cached
+        data = fetch_fn()
+        self.set(key, data, ttl)
+        return data
+
+    def purge_expired(self):
+        with self._lock:
+            now = time.time()
+            expired = [k for k, v in self._store.items() if now - v["ts"] >= v["ttl"]]
+            for k in expired:
+                del self._store[k]
+        return len(expired)
+
+    def stats(self) -> dict:
+        with self._lock:
+            now = time.time()
+            live    = sum(1 for v in self._store.values() if now - v["ts"] < v["ttl"])
+            expired = len(self._store) - live
+            return {"live": live, "expired": expired, "total": len(self._store)}
+
+_cache = SimpleCache()
+
+# TTL constants (seconds)
+TTL_US_STOCK   = 60    # Alpaca price ~real-time; fundamentals stable for 1 min
+TTL_TW_STOCK   = 120   # Yahoo already 15-min delayed; 2 min cache adds little
+TTL_MARKET_US  = 60    # Sectors/gainers refresh every minute
+TTL_MARKET_TW  = 120   # TW batch download is slow; 2 min is fine
+TTL_OPTIONS    = 60    # Options chain changes fast; cap at 1 min
 
 _TW_SYM = re.compile(r'^\d{4,6}[A-Za-z]{0,2}(\.TW[O]?)?$', re.IGNORECASE)
 
@@ -94,7 +152,11 @@ def options_data_api():
     if not symbols:
         symbols = get_dynamic_watchlist(30)
     symbols = symbols[:30]
-    results = get_options_watchlist(symbols)
+    _cache.purge_expired()   # lazy cleanup on each options request
+    results = [
+        _cache.get_or_fetch(f"opts:{s}", lambda s=s: get_options_stats(s), TTL_OPTIONS)
+        for s in symbols
+    ]
     return jsonify({"results": results, "count": len(results)})
 
 @app.route("/options/single")
@@ -102,14 +164,21 @@ def options_single():
     sym = request.args.get("symbol", "").strip().upper()
     if not sym:
         return jsonify({"error": "symbol required"}), 400
-    return jsonify(get_options_stats(sym))
+    result = _cache.get_or_fetch(f"opts:{sym}", lambda: get_options_stats(sym), TTL_OPTIONS)
+    return jsonify(result)
 
 @app.route("/market/data")
 def market_data_api():
     market = request.args.get("market", "US").upper()
     if market not in ("US", "TW"):
         return jsonify({"error": "market must be US or TW"}), 400
-    return jsonify(get_market_overview(market))
+    ttl = TTL_MARKET_US if market == "US" else TTL_MARKET_TW
+    data = _cache.get_or_fetch(
+        f"market:{market}",
+        lambda: get_market_overview(market),
+        ttl
+    )
+    return jsonify(data)
 
 
 # ── ad-hoc stock lookup ───────────────────────────────────────────────────────
@@ -121,7 +190,13 @@ def analyze():
     symbols = [s.strip() for s in symbols_raw.replace(",", " ").split() if s.strip()]
     if not symbols:
         return jsonify({"error": "請輸入至少一個股票代碼。"})
-    results = sort_results([analyze_stock(s) for s in symbols[:10]])
+
+    def _fetch(sym):
+        is_tw = bool(_TW_SYM.match(sym))
+        ttl   = TTL_TW_STOCK if is_tw else TTL_US_STOCK
+        return _cache.get_or_fetch(f"stock:{sym}", lambda: analyze_stock(sym), ttl)
+
+    results = sort_results([_fetch(s) for s in symbols[:10]])
     return jsonify({"results": results})
 
 
@@ -210,12 +285,20 @@ def sync_profile(name):
     stocks = profiles[name].get("stocks", [])
     if not stocks:
         return jsonify({"error": "此投資組合沒有股票，請先加入股票"}), 400
+    # Bust stock cache for each symbol so fresh data is fetched
+    for s in stocks:
+        _cache.delete(f"stock:{s.upper()}")
     results = sort_results([analyze_stock(s) for s in stocks])
     profiles[name]["last_sync"] = datetime.now(TW_TZ).strftime("%Y-%m-%d %H:%M")
     profiles[name]["cache"] = results
     save_profiles(profiles)
     return jsonify({"results": results, "last_sync": profiles[name]["last_sync"]})
 
+
+@app.route("/cache/stats")
+def cache_stats():
+    purged = _cache.purge_expired()
+    return jsonify({**_cache.stats(), "just_purged": purged})
 
 if __name__ == "__main__":
     port = int(os.environ.get("PORT", 5050))

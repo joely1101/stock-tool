@@ -292,19 +292,59 @@ def analyze_stock(symbol: str) -> dict:
             return {"symbol": symbol,
                     "error": f"找不到股票代碼「{symbol}」，請確認後重試。"}
 
-        current_price = (
-            info.get("currentPrice")
-            or info.get("regularMarketPrice")
-            or info.get("previousClose")
-        )
+        # ── Price data ────────────────────────────────────────────
+        # Priority:  1) Alpaca IEX (US only, real-time)
+        #            2) yfinance fast_info (US, ~1-5 min delay)
+        #            3) yfinance info (Taiwan + fallback)
+        currency = info.get("currency", "USD")
+        price_source = "Yahoo"          # default; overwritten below
+        if not is_taiwan:
+            snap = {}
+            try:
+                from alpaca_data import get_us_snapshot_single
+                snap = get_us_snapshot_single(symbol)
+            except Exception:
+                pass
+
+            if snap.get("price"):
+                current_price = snap["price"]
+                day_change    = snap["change"]
+                day_chg_pct   = snap["change_pct"]
+                week52_high   = info.get("fiftyTwoWeekHigh")
+                price_source  = "Alpaca"
+            else:
+                try:
+                    fi            = ticker.fast_info
+                    current_price = float(fi.last_price)
+                    prev_close    = float(fi.previous_close) if fi.previous_close else None
+                    day_change    = round(current_price - prev_close, 2) if prev_close else None
+                    day_chg_pct   = round(day_change / prev_close * 100, 2) if prev_close and day_change else None
+                    week52_high   = float(fi.year_high) if fi.year_high else info.get("fiftyTwoWeekHigh")
+                    currency      = fi.currency or currency
+                    price_source  = "Yahoo"
+                except Exception:
+                    current_price = info.get("currentPrice") or info.get("regularMarketPrice") or info.get("previousClose")
+                    day_change    = info.get("regularMarketChange")
+                    day_chg_pct   = info.get("regularMarketChangePercent")
+                    week52_high   = info.get("fiftyTwoWeekHigh")
+        else:
+            current_price = (info.get("currentPrice")
+                             or info.get("regularMarketPrice")
+                             or info.get("previousClose"))
+            day_change    = info.get("regularMarketChange")
+            day_chg_pct   = info.get("regularMarketChangePercent")
+            week52_high   = info.get("fiftyTwoWeekHigh")
+
         if current_price is None:
             return {"symbol": symbol,
                     "error": f"無法取得「{symbol}」的報價資料。"}
 
-        currency    = info.get("currency", "USD")
-        day_change  = info.get("regularMarketChange")
-        day_chg_pct = info.get("regularMarketChangePercent")
+        pct_from_52w_high = (
+            round((current_price - week52_high) / week52_high * 100, 1)
+            if week52_high else None
+        )
 
+        # ── Fundamentals (info only, not in fast_info) ────────────
         target_price = info.get("targetMeanPrice")
         forward_pe   = info.get("forwardPE")
         if forward_pe and (forward_pe < 0 or forward_pe > 1000):
@@ -314,12 +354,7 @@ def analyze_stock(symbol: str) -> dict:
         if peg_ratio and (peg_ratio < 0 or peg_ratio > 200):
             peg_ratio = None
 
-        rev_growth  = info.get("revenueGrowth")
-        week52_high = info.get("fiftyTwoWeekHigh")
-        pct_from_52w_high = (
-            round((current_price - week52_high) / week52_high * 100, 1)
-            if week52_high else None
-        )
+        rev_growth = info.get("revenueGrowth")
 
         hist = ticker.history(period="1y")
         closes  = hist["Close"]
@@ -390,6 +425,7 @@ def analyze_stock(symbol: str) -> dict:
             "is_taiwan": is_taiwan,
             "currency": currency,
             "company_name": company_name,
+            "price_source":      price_source,
             "current_price_fmt": _fmt_price(current_price, currency),
             "day_change":     round(day_change, 2)  if day_change  is not None else None,
             "day_chg_pct":    round(day_chg_pct, 2) if day_chg_pct is not None else None,

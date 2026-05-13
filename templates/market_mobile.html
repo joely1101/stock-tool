@@ -82,6 +82,17 @@
                  align-items:center; justify-content:center; flex-shrink:0; }
     .updated { font-size:0.72rem; color:var(--dim); }
 
+    /* news */
+    .news-item { display:flex; flex-direction:column; gap:.2rem;
+                 padding:.6rem .8rem; border-bottom:1px solid var(--bg3);
+                 text-decoration:none; color:var(--text); }
+    .news-item:last-child { border-bottom:none; }
+    .news-item:active { background:var(--bg3); }
+    .news-meta  { display:flex; gap:.5rem; font-size:.7rem; }
+    .news-age   { color:var(--dim); }
+    .news-src   { color:var(--blue); }
+    .news-title { font-size:.82rem; line-height:1.4; }
+
     /* spinner */
     .spinner { text-align:center; color:var(--muted); padding:2rem; font-size:0.85rem; }
 
@@ -128,6 +139,7 @@
 
 <script>
 let curMarket = "US";
+let _loadSeq = 0;
 
 (function(){
   const t = localStorage.getItem("theme") || "dark";
@@ -142,10 +154,12 @@ function switchMarket(m) {
 }
 
 async function loadMarket(market) {
+  const seq = ++_loadSeq;
   document.getElementById("main").innerHTML = `<div class="spinner">⏳ 載入中…</div>`;
   try {
     const res  = await fetch(`/market/data?market=${market}`);
     const data = await res.json();
+    if (seq !== _loadSeq) return;   // stale response — user already switched
     if (data.error) { document.getElementById("main").innerHTML = `<p style="color:var(--red);padding:1rem">${data.error}</p>`; return; }
     // Populate status bar (always show both markets)
     const allStatus = await fetch(`/market/data?market=${market === "US" ? "TW" : "US"}`)
@@ -165,13 +179,23 @@ async function loadMarket(market) {
     if (ft) ft.textContent = data.fetch_time ? `取得：${data.fetch_time}` : "";
     document.getElementById("updatedAt").textContent = "";
     document.getElementById("main").innerHTML =
-      mGainers(data.gainers, market) +
-      mVolume(data.volume, market) +
-      mSectors(data.sectors, market) +
-      mExpert(data.expert, market);
+      mGainers(data.gainers, market, (data.sources||{}).gainers) +
+      mVolume(data.volume,   market, (data.sources||{}).volume)  +
+      mSectors(data.sectors, market, (data.sources||{}).sectors) +
+      mExpert(data.expert,   market, (data.sources||{}).expert)  +
+      mNews(data.news, market);
   } catch(e) {
     document.getElementById("main").innerHTML = `<p style="color:var(--red);padding:1rem">載入失敗</p>`;
   }
+}
+
+function srcPill(src) {
+  if (!src) return "";
+  const isAlpaca = src.includes("Alpaca");
+  return `<span style="font-size:.62rem;font-weight:700;padding:.08rem .38rem;border-radius:20px;margin-left:.3rem;
+    background:${isAlpaca?'#0d2a1a':'#1c2128'};
+    color:${isAlpaca?'#3fb950':'#8b949e'};
+    border:1px solid ${isAlpaca?'#23863666':'#30363d'};">${src}</span>`;
 }
 
 function chg(v) {
@@ -179,6 +203,25 @@ function chg(v) {
   const c = v>0?"pos":v<0?"neg":"neut";
   return `<span class="${c}">${v>0?"+":""}${v}%</span>`;
 }
+function mNews(rows, market) {
+  const label = market === "TW" ? "熱門財經新聞" : "Market News";
+  const src   = market === "TW" ? "鉅亨網 / Google News" : "Google News / Yahoo Finance";
+  return `<div class="section">
+    <div class="section-header">
+      <span class="section-title">📰 ${label}</span>
+      <span class="section-sub">${src}</span>
+    </div>
+    ${(rows||[]).length ? rows.map(n => `
+      <a class="news-item" href="${esc(n.link)}" target="_blank" rel="noopener">
+        <div class="news-meta">
+          <span class="news-age">${esc(n.age)}</span>
+          <span class="news-src">${esc(n.source)}</span>
+        </div>
+        <span class="news-title">${esc(n.title)}</span>
+      </a>`).join("") : `<div style="padding:1rem;color:var(--dim)">無法載入新聞</div>`}
+  </div>`;
+}
+
 function esc(s){ return String(s||"").replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;"); }
 
 function mRows(rows, cols) {
@@ -191,29 +234,29 @@ function mRows(rows, cols) {
     </div>`).join("") || `<div class="row-item"><span style="color:var(--dim)">無資料</span></div>`;
 }
 
-function mGainers(rows, market) {
+function mGainers(rows, market, src) {
   return `<div class="section">
     <div class="section-header">
-      <span class="section-title">🚀 ${market==="TW"?"今日漲幅前10":"Top 10 Gainers"}</span>
+      <span class="section-title">🚀 ${market==="TW"?"今日漲幅前10":"Top 10 Gainers (Large–Mega)"}${srcPill(src)}</span>
     </div>
     ${mRows(rows, r => `<span class="r-price">${r.price_fmt||""}</span><span class="r-chg">${chg(r.change_pct)}</span>`)}
   </div>`;
 }
 
-function mVolume(rows, market) {
+function mVolume(rows, market, src) {
   return `<div class="section">
     <div class="section-header">
-      <span class="section-title">📊 ${market==="TW"?"今日成交量前10":"Top 10 Volume"}</span>
+      <span class="section-title">📊 ${market==="TW"?"今日成交量前10":"Top 10 Volume"}${srcPill(src)}</span>
     </div>
     ${mRows(rows, r => `<span class="r-price">${r.volume_fmt||""}</span><span class="r-chg">${chg(r.change_pct)}</span>`)}
   </div>`;
 }
 
-function mSectors(rows, market) {
+function mSectors(rows, market, src) {
   const maxAbs = Math.max(...(rows||[]).map(r=>Math.abs(r.change_pct||0)), 0.01);
   return `<div class="section">
     <div class="section-header">
-      <span class="section-title">🏭 ${market==="TW"?"類股表現":"Sector Performance"}</span>
+      <span class="section-title">🏭 ${market==="TW"?"類股表現":"Sector Performance"}${srcPill(src)}</span>
     </div>
     <div>${(rows||[]).map(r=>{
       const pct=r.change_pct, cls=pct>0?"pos":pct<0?"neg":"neut";
@@ -229,10 +272,10 @@ function mSectors(rows, market) {
   </div>`;
 }
 
-function mExpert(rows, market) {
+function mExpert(rows, market, src) {
   return `<div class="section">
     <div class="section-header">
-      <span class="section-title">⭐ ${market==="TW"?"法人推薦精選":"Motley Fool 精選"}</span>
+      <span class="section-title">⭐ ${market==="TW"?"法人推薦精選":"Motley Fool 精選"}${srcPill(src)}</span>
     </div>
     ${mRows(rows, r => `
       <span class="r-price">${r.price_fmt||""}</span>

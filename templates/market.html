@@ -66,6 +66,12 @@
     }
     .section-title { font-size:0.9rem; font-weight:700; }
     .section-sub   { font-size:0.72rem; color:var(--dim); }
+    .src-pill {
+      font-size:0.68rem; font-weight:700; padding:0.1rem 0.45rem;
+      border-radius:20px; margin-left:0.4rem; vertical-align:middle;
+    }
+    .src-alpaca { background:#0d2a1a; color:#3fb950; border:1px solid #23863666; }
+    .src-yahoo  { background:#1c2128; color:#8b949e; border:1px solid #30363d; }
 
     /* ── table inside section ── */
     .sec-table { width:100%; border-collapse:collapse; font-size:0.82rem; }
@@ -99,6 +105,23 @@
     /* ── spinner ── */
     .spinner { text-align:center; color:var(--muted); padding:2rem; font-size:0.85rem; }
     .error-row td { color:var(--red); font-size:0.82rem; text-align:center; padding:1rem; }
+
+    /* ── news section ── */
+    .news-section {
+      max-width:1200px; margin:0 1.5rem 2rem;
+      background:var(--bg2); border:1px solid var(--border); border-radius:10px; overflow:hidden;
+    }
+    .news-item {
+      display:flex; align-items:baseline; gap:0.75rem;
+      padding:0.6rem 1rem; border-bottom:1px solid var(--bg3);
+      text-decoration:none; color:var(--text); transition:background 0.12s;
+    }
+    .news-item:last-child { border-bottom:none; }
+    .news-item:hover { background:var(--bg3); }
+    .news-age    { font-size:0.72rem; color:var(--dim); white-space:nowrap; min-width:60px; }
+    .news-source { font-size:0.72rem; color:var(--blue); white-space:nowrap; max-width:100px;
+                   overflow:hidden; text-overflow:ellipsis; }
+    .news-title  { font-size:0.85rem; flex:1; line-height:1.4; }
 
     /* ── themes ── */
     html.theme-white {
@@ -149,6 +172,7 @@
 
 <script>
 let currentMarket = "US";
+let _loadSeq = 0;   // increments on every load; stale responses are discarded
 
 // Apply saved theme on load
 (function(){
@@ -164,6 +188,7 @@ function switchMarket(m) {
 }
 
 async function loadMarket(market) {
+  const seq  = ++_loadSeq;           // capture this request's sequence number
   const grid = document.getElementById("mainGrid");
   grid.innerHTML = `
     <div class="section"><div class="spinner">⏳ 載入中…</div></div>
@@ -174,6 +199,7 @@ async function loadMarket(market) {
   try {
     const res  = await fetch(`/market/data?market=${market}`);
     const data = await res.json();
+    if (seq !== _loadSeq) return;    // ← stale: user already switched market, discard
     if (data.error) { grid.innerHTML = `<p style="color:var(--red);padding:2rem">${data.error}</p>`; return; }
 
     // Status bar
@@ -186,12 +212,23 @@ async function loadMarket(market) {
     if (fetchEl) fetchEl.textContent = `資料取得：${data.fetch_time || ""} (台灣時間)`;
     document.getElementById("updatedAt").textContent = "";
 
+    const src = data.sources || {};
     grid.innerHTML = `
-      ${sectionGainers(data.gainers, market)}
-      ${sectionVolume(data.volume, market)}
-      ${sectionSectors(data.sectors, market)}
-      ${sectionExpert(data.expert, market, data.expert_source)}
+      ${sectionGainers(data.gainers, market, src.gainers)}
+      ${sectionVolume(data.volume, market, src.volume)}
+      ${sectionSectors(data.sectors, market, src.sectors)}
+      ${sectionExpert(data.expert, market, data.expert_source, src.expert)}
     `;
+
+    // News section (full width, below the grid)
+    let newsEl = document.getElementById("newsSection");
+    if (!newsEl) {
+      newsEl = document.createElement("div");
+      newsEl.id = "newsSection";
+      newsEl.className = "news-section";
+      document.getElementById("mainGrid").after(newsEl);
+    }
+    newsEl.innerHTML = sectionNews(data.news, market);
   } catch(e) {
     grid.innerHTML = `<p style="color:var(--red);padding:2rem">載入失敗：${e.message}</p>`;
   }
@@ -199,17 +236,23 @@ async function loadMarket(market) {
 
 // ── Section renderers ──────────────────────────────────────────────
 
+function srcPill(src) {
+  if (!src) return "";
+  const cls = src.includes("Alpaca") ? "src-alpaca" : "src-yahoo";
+  return `<span class="src-pill ${cls}">${src}</span>`;
+}
+
 function chgHtml(v) {
   if (v == null) return '<span class="neut">N/A</span>';
   const cls = v > 0 ? "pos" : v < 0 ? "neg" : "neut";
   return `<span class="${cls}">${v > 0 ? "+" : ""}${v}%</span>`;
 }
 
-function sectionGainers(rows, market) {
-  const label = market === "TW" ? "今日漲幅前10" : "Today Top 10 Gainers";
+function sectionGainers(rows, market, src) {
+  const label = market === "TW" ? "今日漲幅前10" : "Today Top 10 Gainers (Large–Mega Cap)";
   return `<div class="section">
     <div class="section-header">
-      <span class="section-title">🚀 ${label}</span>
+      <span class="section-title">🚀 ${label}${srcPill(src)}</span>
       <span class="section-sub">${market === "TW" ? "台灣主要個股" : "US Equity"}</span>
     </div>
     <table class="sec-table">
@@ -227,11 +270,11 @@ function sectionGainers(rows, market) {
   </div>`;
 }
 
-function sectionVolume(rows, market) {
+function sectionVolume(rows, market, src) {
   const label = market === "TW" ? "今日成交量前10" : "Today Top 10 Volume";
   return `<div class="section">
     <div class="section-header">
-      <span class="section-title">📊 ${label}</span>
+      <span class="section-title">📊 ${label}${srcPill(src)}</span>
       <span class="section-sub">${market === "TW" ? "台灣主要個股" : "Most Active"}</span>
     </div>
     <table class="sec-table">
@@ -250,12 +293,12 @@ function sectionVolume(rows, market) {
   </div>`;
 }
 
-function sectionSectors(rows, market) {
+function sectionSectors(rows, market, src) {
   const label = market === "TW" ? "類股表現" : "Sector Performance";
   const maxAbs = Math.max(...(rows||[]).map(r => Math.abs(r.change_pct||0)), 0.01);
   return `<div class="section">
     <div class="section-header">
-      <span class="section-title">🏭 ${label}</span>
+      <span class="section-title">🏭 ${label}${srcPill(src)}</span>
       <span class="section-sub">${market === "TW" ? "代表性個股平均" : "SPDR Sector ETFs"}</span>
     </div>
     <div>${(rows||[]).map(r => {
@@ -275,11 +318,11 @@ function sectionSectors(rows, market) {
   </div>`;
 }
 
-function sectionExpert(rows, market, source) {
+function sectionExpert(rows, market, source, src) {
   const label = market === "TW" ? "法人推薦精選" : "Motley Fool 精選";
   return `<div class="section">
     <div class="section-header">
-      <span class="section-title">⭐ ${label}</span>
+      <span class="section-title">⭐ ${label}${srcPill(src)}</span>
       <span class="section-sub">${market === "TW" ? "強力買入評級" : "來源：Motley Fool 公開推薦股 × 分析師評級"}</span>
     </div>
     <table class="sec-table">
@@ -302,6 +345,25 @@ function sectionExpert(rows, market, source) {
       </tbody>
     </table>
   </div>`;
+}
+
+function sectionNews(rows, market) {
+  const label = market === "TW" ? "熱門財經新聞" : "Market News";
+  const src   = market === "TW" ? "來源：鉅亨網 / Google News" : "來源：Google News / Yahoo Finance";
+  if (!rows || !rows.length)
+    return `<div class="section-header"><span class="section-title">📰 ${label}</span></div>
+            <div style="padding:1rem;color:var(--dim)">無法載入新聞</div>`;
+  return `
+    <div class="section-header" style="padding:.75rem 1rem;border-bottom:1px solid var(--border);">
+      <span class="section-title">📰 ${label}</span>
+      <span class="section-sub">${src}</span>
+    </div>
+    ${rows.map(n => `
+      <a class="news-item" href="${esc(n.link)}" target="_blank" rel="noopener">
+        <span class="news-age">${esc(n.age)}</span>
+        <span class="news-source">${esc(n.source)}</span>
+        <span class="news-title">${esc(n.title)}</span>
+      </a>`).join("")}`;
 }
 
 function esc(s) {

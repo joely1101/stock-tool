@@ -89,11 +89,28 @@ def get_options_stats(symbol: str) -> dict:
         ticker = yf.Ticker(sym)
 
         # ── price info ────────────────────────────────────────────
-        info = ticker.info or {}
-        price     = info.get("currentPrice") or info.get("regularMarketPrice")
-        change    = info.get("regularMarketChange", 0) or 0
-        chg_pct   = info.get("regularMarketChangePercent", 0) or 0
-        name      = info.get("shortName", sym)
+        info  = ticker.info or {}
+        name  = info.get("shortName", sym)
+        price_source = "Yahoo"
+
+        # Try Alpaca for real-time price/change first
+        snap = {}
+        try:
+            from alpaca_data import get_us_snapshot_single
+            snap = get_us_snapshot_single(sym)
+        except Exception:
+            pass
+
+        if snap.get("price"):
+            price    = snap["price"]
+            change   = snap.get("change") or 0
+            chg_pct  = snap.get("change_pct") or 0
+            price_source = "Alpaca"
+        else:
+            price    = info.get("currentPrice") or info.get("regularMarketPrice")
+            change   = info.get("regularMarketChange", 0) or 0
+            chg_pct  = info.get("regularMarketChangePercent", 0) or 0
+
         if not price:
             return {"symbol": sym, "error": "無報價資料"}
 
@@ -177,6 +194,7 @@ def get_options_stats(symbol: str) -> dict:
             "exp_to_exp_fmt":f"±${exp_to_exp:.2f}" if exp_to_exp else "N/A",
             "days_to_exp":   days_to_exp,
             "nearest_exp":   nearest_exp_str,
+            "price_source": price_source,
             "fetched_at": datetime.now(_NY_TZ).strftime("%H:%M ET"),
         }
 

@@ -3,10 +3,12 @@ market_data.py — Daily market overview for US and Taiwan markets.
 Sections: Top 10 Gainers, Top 10 Volume, Top Sectors, Expert Picks
 """
 import requests
+import xml.etree.ElementTree as ET
 import yfinance as yf
 import pandas as pd
 from datetime import datetime, time as dtime
 from zoneinfo import ZoneInfo
+from email.utils import parsedate_to_datetime
 
 _NY_TZ = ZoneInfo("America/New_York")
 _TW_TZ = ZoneInfo("Asia/Taipei")
@@ -88,14 +90,15 @@ def _us_screener(scr_id: str, count: int = 10) -> list:
         quotes = r.json()["finance"]["result"][0]["quotes"]
         return [
             {
-                "symbol":     q.get("symbol", ""),
-                "name":       q.get("shortName") or q.get("longName", ""),
-                "price":      round(q.get("regularMarketPrice", 0), 2),
-                "price_fmt":  f"${q.get('regularMarketPrice', 0):,.2f}",
-                "change_pct": round(q.get("regularMarketChangePercent", 0), 2),
-                "volume":     q.get("regularMarketVolume", 0),
-                "volume_fmt": _fmt_vol(q.get("regularMarketVolume")),
-                "market_cap": _fmt_cap(q.get("marketCap")),
+                "symbol":         q.get("symbol", ""),
+                "name":           q.get("shortName") or q.get("longName", ""),
+                "price":          round(q.get("regularMarketPrice", 0), 2),
+                "price_fmt":      f"${q.get('regularMarketPrice', 0):,.2f}",
+                "change_pct":     round(q.get("regularMarketChangePercent", 0), 2),
+                "volume":         q.get("regularMarketVolume", 0),
+                "volume_fmt":     _fmt_vol(q.get("regularMarketVolume")),
+                "market_cap_raw": q.get("marketCap"),          # raw int for filtering
+                "market_cap":     _fmt_cap(q.get("marketCap")),
             }
             for q in quotes[:count]
         ]
@@ -103,12 +106,44 @@ def _us_screener(scr_id: str, count: int = 10) -> list:
         return []
 
 
+def _enrich_with_alpaca(rows: list, sort_key: str = "change_pct") -> list:
+    """
+    Take Yahoo screener rows, replace price/change with Alpaca real-time data,
+    then re-sort by sort_key. Falls back to original rows on any error.
+    """
+    symbols = [r["symbol"] for r in rows if r.get("symbol")]
+    if not symbols:
+        return rows
+    try:
+        from alpaca_data import get_us_snapshots
+        snaps = get_us_snapshots(symbols)
+        for r in rows:
+            snap = snaps.get(r["symbol"], {})
+            if snap.get("price"):
+                r["price_fmt"]  = f"${snap['price']:,.2f}"
+                r["change_pct"] = snap.get("change_pct")
+            if snap.get("volume"):
+                r["volume"]     = snap["volume"]
+                r["volume_fmt"] = _fmt_vol(snap["volume"])
+        rows.sort(key=lambda x: x.get(sort_key) or -999, reverse=True)
+    except Exception:
+        pass
+    return rows
+
+
+MIN_MARKET_CAP = 5_000_000_000   # $5B — large-cap floor; filters micro/small/mid caps
+
 def get_us_gainers(count=10):
-    return _us_screener("day_gainers", count)
+    # Fetch 4× to ensure enough remain after market-cap filter
+    rows = _us_screener("day_gainers", count * 4)
+    rows = [r for r in rows if (r.get("market_cap_raw") or 0) >= MIN_MARKET_CAP]
+    rows = _enrich_with_alpaca(rows[:count * 2], sort_key="change_pct")
+    return rows[:count]
 
 
 def get_us_volume(count=10):
-    return _us_screener("most_actives", count)
+    rows = _us_screener("most_actives", count)
+    return _enrich_with_alpaca(rows, sort_key="volume")
 
 
 # Motley Fool's publicly documented long-term favourite stocks
@@ -172,23 +207,41 @@ US_SECTORS = [
 ]
 
 def get_us_sectors() -> list:
+    """
+    Sector ETF performance — one Alpaca batch call (real-time IEX),
+    falls back to parallel fast_info if Alpaca unavailable.
+    """
     syms = [s for _, s in US_SECTORS]
+    snaps = {}
     try:
-        raw = yf.download(syms, period="5d", auto_adjust=True, progress=False)
-        closes = raw["Close"]
-        result = []
-        for name, sym in US_SECTORS:
-            try:
-                s   = closes[sym].dropna()
-                chg = round((float(s.iloc[-1]) - float(s.iloc[-2])) / float(s.iloc[-2]) * 100, 2)
-                result.append({"name": name, "symbol": sym,
-                                "change_pct": chg, "price_fmt": f"${float(s.iloc[-1]):,.2f}"})
-            except Exception:
-                result.append({"name": name, "symbol": sym, "change_pct": None, "price_fmt": "N/A"})
-        result.sort(key=lambda x: x["change_pct"] or -999, reverse=True)
-        return result
+        from alpaca_data import get_us_snapshots
+        snaps = get_us_snapshots(syms)
     except Exception:
-        return [{"name": n, "symbol": s, "change_pct": None, "price_fmt": "N/A"} for n, s in US_SECTORS]
+        pass
+
+    result = []
+    for name, sym in US_SECTORS:
+        s = snaps.get(sym)
+        if s and s.get("price") and s.get("prev_close"):
+            chg = s["change_pct"]
+            result.append({"name": name, "symbol": sym,
+                            "change_pct": chg,
+                            "price_fmt": f"${s['price']:,.2f}"})
+        else:
+            # per-ticker fast_info fallback
+            try:
+                fi  = yf.Ticker(sym).fast_info
+                p   = float(fi.last_price)
+                pre = float(fi.previous_close)
+                chg = round((p - pre) / pre * 100, 2) if pre else None
+                result.append({"name": name, "symbol": sym,
+                                "change_pct": chg, "price_fmt": f"${p:,.2f}"})
+            except Exception:
+                result.append({"name": name, "symbol": sym,
+                                "change_pct": None, "price_fmt": "N/A"})
+
+    result.sort(key=lambda x: x["change_pct"] or -999, reverse=True)
+    return result
 
 
 # ── Taiwan stocks ─────────────────────────────────────────────────────────────
@@ -316,6 +369,134 @@ def get_tw_expert_picks(count=10) -> list:
     return results[:count]
 
 
+# ── News ─────────────────────────────────────────────────────────────────────
+
+def _parse_rss(url: str, count: int = 8) -> list:
+    """Fetch and parse an RSS feed. Returns list of news dicts."""
+    try:
+        r = requests.get(url, headers=_YAHOO_HEADERS, timeout=12)
+        root = ET.fromstring(r.text)
+        items = root.findall(".//item")
+        result = []
+        for it in items[:count]:
+            title  = (it.find("title") or it.find("{*}title"))
+            link   = (it.find("link")  or it.find("{*}link"))
+            pub    = (it.find("pubDate") or it.find("{*}pubDate"))
+            source = (it.find("source") or it.find("{*}source"))
+
+            title_text = title.text.strip()  if title  is not None else ""
+            link_text  = link.text.strip()   if link   is not None else "#"
+            pub_text   = pub.text.strip()    if pub    is not None else ""
+            src_text   = (source.text or source.get("url","")).strip() if source is not None else ""
+
+            # Clean Google News redirect links → extract real URL
+            if "news.google.com" in link_text:
+                import re
+                m = re.search(r'url=([^&]+)', link_text)
+                if m:
+                    from urllib.parse import unquote
+                    link_text = unquote(m.group(1))
+
+            # Parse publish time → relative string
+            age = ""
+            try:
+                dt = parsedate_to_datetime(pub_text)
+                diff = datetime.now(dt.tzinfo) - dt
+                mins = int(diff.total_seconds() / 60)
+                if mins < 60:   age = f"{mins}分鐘前"
+                elif mins < 1440: age = f"{mins//60}小時前"
+                else:           age = f"{mins//1440}天前"
+            except Exception:
+                age = pub_text[:16] if pub_text else ""
+
+            if title_text:
+                result.append({
+                    "title":  title_text,
+                    "link":   link_text,
+                    "age":    age,
+                    "source": src_text,
+                })
+        return result
+    except Exception:
+        return []
+
+
+def _parse_anue(count: int = 8) -> list:
+    """
+    Fetch Taiwan stock news from Anue (鉅亨網) JSON API.
+    Always passes startAt/endAt to guarantee only recent articles are returned.
+    Tries 24 h first; widens to 3 days if fewer than 3 results.
+    """
+    import time
+
+    def _fetch(hours_back: int) -> list:
+        now_ts   = int(time.time())
+        start_ts = now_ts - hours_back * 3600
+        url = (
+            f"https://news.cnyes.com/api/v3/news/category/tw_stock"
+            f"?limit={count}&startAt={start_ts}&endAt={now_ts}"
+        )
+        r     = requests.get(url, headers=_YAHOO_HEADERS, timeout=12)
+        items = r.json().get("items", {}).get("data", [])
+        result = []
+        for it in items[:count]:
+            pub_ts = it.get("publishAt", 0)
+            try:
+                dt   = datetime.fromtimestamp(pub_ts, tz=_TW_TZ)
+                diff = datetime.now(_TW_TZ) - dt
+                mins = int(diff.total_seconds() / 60)
+                age  = (f"{mins}分鐘前" if mins < 60
+                        else f"{mins//60}小時前" if mins < 1440
+                        else f"{mins//1440}天前")
+            except Exception:
+                age = ""
+            title = it.get("title", "").strip()
+            if title:
+                result.append({
+                    "title":  title,
+                    "link":   f"https://news.cnyes.com/news/id/{it.get('newsId','')}",
+                    "age":    age,
+                    "source": "鉅亨網",
+                })
+        return result
+
+    try:
+        news = _fetch(24)               # try last 24 hours first
+        if len(news) < 3:
+            news = _fetch(72)           # widen to 3 days if not enough
+        return news
+    except Exception:
+        return []
+
+
+def get_us_news(count: int = 8) -> list:
+    """Top US market news — Google News RSS last 24 h (primary) + Yahoo Finance (fallback)."""
+    # tbs=qdr:d  → past 24 hours
+    news = _parse_rss(
+        "https://news.google.com/rss/search?q=stock+market+finance+S%26P500"
+        "&hl=en-US&gl=US&ceid=US:en&tbs=qdr:d", count
+    )
+    if len(news) < 3:                   # widen to 3 days
+        news = _parse_rss(
+            "https://news.google.com/rss/search?q=stock+market+finance+S%26P500"
+            "&hl=en-US&gl=US&ceid=US:en&tbs=qdr:3d", count
+        )
+    if len(news) < 3:                   # last fallback
+        news = _parse_rss("https://finance.yahoo.com/rss/topstories", count)
+    return news[:count]
+
+
+def get_tw_news(count: int = 8) -> list:
+    """Top Taiwan market news — Anue 24 h (primary) + Google News TW (fallback)."""
+    news = _parse_anue(count)           # already handles 24 h → 3 day fallback
+    if len(news) < 3:
+        news = _parse_rss(
+            "https://news.google.com/rss/search?q=台灣股市+台股+股票"
+            "&hl=zh-TW&gl=TW&ceid=TW:zh-Hant&tbs=qdr:d", count
+        )
+    return news[:count]
+
+
 # ── Combined entry point ──────────────────────────────────────────────────────
 
 def get_market_overview(market: str) -> dict:
@@ -331,6 +512,13 @@ def get_market_overview(market: str) -> dict:
                 "market_status": status["US"],
                 "fetch_time":    status["fetch_time"],
                 "expert_source": "Motley Fool 精選池 (公開推薦股)",
+                "news": get_us_news(8),
+                "sources": {
+                    "gainers": "Yahoo + Alpaca",
+                    "volume":  "Yahoo + Alpaca",
+                    "sectors": "Alpaca IEX",
+                    "expert":  "Yahoo",
+                },
             }
         else:
             batch = _get_tw_batch()
@@ -342,6 +530,13 @@ def get_market_overview(market: str) -> dict:
                 "market_status": status["TW"],
                 "fetch_time":    status["fetch_time"],
                 "expert_source": "法人強力買入評級",
+                "news": get_tw_news(8),
+                "sources": {
+                    "gainers": "Yahoo",
+                    "volume":  "Yahoo",
+                    "sectors": "Yahoo",
+                    "expert":  "Yahoo",
+                },
             }
     except Exception as e:
         return {"error": str(e)}
