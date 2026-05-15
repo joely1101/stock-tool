@@ -6,6 +6,27 @@ import pandas as pd
 import numpy as np
 from datetime import datetime, timezone
 
+# ── ticker.info cache (10-min TTL) ───────────────────────────────────────────
+# Fundamentals (PE, targets, analyst counts) change slowly.
+# Caching eliminates the biggest bottleneck: parallel Yahoo Finance requests.
+class _InfoCache:
+    TTL = 10 * 60   # 10 minutes
+
+    def __init__(self):
+        self._s = {}
+        self._l = threading.Lock()
+
+    def get(self, sym):
+        with self._l:
+            e = self._s.get(sym)
+            return e["data"] if e and time.time() - e["ts"] < self.TTL else None
+
+    def set(self, sym, data):
+        with self._l:
+            self._s[sym] = {"data": data, "ts": time.time()}
+
+_info_cache = _InfoCache()
+
 # ── Rating-change daily cache ─────────────────────────────────────────────────
 # get_rating_change_today costs ~0.63s for TW (rarely returns data) and
 # ~0.09s for US. Cache by symbol+date so it's only fetched once per day.
@@ -370,7 +391,11 @@ def _fetch_tw(raw: str):
     for suffix in ['.TW', '.TWO']:
         sym = raw + suffix
         ticker = yf.Ticker(sym)
-        info = ticker.info or {}
+        info = _info_cache.get(sym)
+        if info is None:
+            info = ticker.info or {}
+            if info.get("quoteType"):
+                _info_cache.set(sym, info)
         price = (info.get("currentPrice") or info.get("regularMarketPrice")
                  or info.get("previousClose"))
         if info.get("quoteType") and price is not None:
@@ -396,12 +421,20 @@ def analyze_stock(symbol: str) -> dict:
             is_taiwan = True
             symbol = raw
             ticker = yf.Ticker(symbol)
-            info = ticker.info or {}
+            info = _info_cache.get(symbol)
+            if info is None:
+                info = ticker.info or {}
+                if info.get("quoteType"):
+                    _info_cache.set(symbol, info)
 
         else:
             symbol = raw
             ticker = yf.Ticker(symbol)
-            info = ticker.info or {}
+            info = _info_cache.get(symbol)
+            if info is None:
+                info = ticker.info or {}
+                if info.get("quoteType"):
+                    _info_cache.set(symbol, info)
 
         if not info or info.get("quoteType") is None:
             return {"symbol": symbol,
@@ -443,12 +476,28 @@ def analyze_stock(symbol: str) -> dict:
                     day_chg_pct   = info.get("regularMarketChangePercent")
                     week52_high   = info.get("fiftyTwoWeekHigh")
         else:
-            current_price = (info.get("currentPrice")
-                             or info.get("regularMarketPrice")
-                             or info.get("previousClose"))
-            day_change    = info.get("regularMarketChange")
-            day_chg_pct   = info.get("regularMarketChangePercent")
-            week52_high   = info.get("fiftyTwoWeekHigh")
+            # Taiwan: try Shioaji (real-time) first, fall back to yfinance
+            tw_code = re.sub(r'\.(TW[O]?)$', '', symbol, flags=re.IGNORECASE)
+            tw_snap = {}
+            try:
+                from shioaji_data import get_tw_snapshot_single
+                tw_snap = get_tw_snapshot_single(tw_code)
+            except Exception:
+                pass
+
+            if tw_snap.get("price"):
+                current_price = tw_snap["price"]
+                day_change    = tw_snap.get("change")
+                day_chg_pct   = tw_snap.get("change_pct")
+                week52_high   = info.get("fiftyTwoWeekHigh")
+                price_source  = "Shioaji"
+            else:
+                current_price = (info.get("currentPrice")
+                                 or info.get("regularMarketPrice")
+                                 or info.get("previousClose"))
+                day_change    = info.get("regularMarketChange")
+                day_chg_pct   = info.get("regularMarketChangePercent")
+                week52_high   = info.get("fiftyTwoWeekHigh")
 
         if current_price is None:
             return {"symbol": symbol,
@@ -474,7 +523,15 @@ def analyze_stock(symbol: str) -> dict:
         hist = _hist_cache.get(symbol)
         if hist is None:
             if hist is None:
-                hist = ticker.history(period="6mo")
+                if is_taiwan:
+                    try:
+                        from shioaji_data import get_tw_history
+                        _tw_code = re.sub(r'\.(TW[O]?)$', '', symbol, flags=re.IGNORECASE)
+                        hist = get_tw_history(_tw_code, days=180)
+                    except Exception:
+                        hist = pd.DataFrame()
+                if hist is None or (hasattr(hist, 'empty') and hist.empty):
+                    hist = ticker.history(period="6mo")
             if not hist.empty:
                 _hist_cache.set(symbol, hist)
         closes  = hist["Close"]

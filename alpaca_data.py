@@ -88,7 +88,29 @@ def get_us_snapshots(symbols: list) -> dict:
         return {}   # caller falls back to yfinance
 
 
+import threading as _threading
+
+_alpaca_prefetch: dict = {}
+_alpaca_prefetch_lock = _threading.Lock()
+
+
+def prefetch_us_snapshots(symbols: list) -> None:
+    """
+    Batch-fetch all US symbols in ONE Alpaca call before the parallel sync.
+    Reduces 40 individual calls (0.23s each) to a single call (~0.05s).
+    """
+    if not symbols:
+        return
+    snaps = get_us_snapshots(symbols)
+    with _alpaca_prefetch_lock:
+        _alpaca_prefetch.update(snaps)
+
+
 def get_us_snapshot_single(symbol: str) -> dict:
-    """Convenience wrapper for one symbol."""
+    """Check prefetch cache first, then fall back to individual call."""
+    sym = symbol.upper()
+    with _alpaca_prefetch_lock:
+        if sym in _alpaca_prefetch:
+            return _alpaca_prefetch.pop(sym)
     result = get_us_snapshots([symbol])
     return result.get(symbol.upper(), {})

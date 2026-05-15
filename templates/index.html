@@ -1598,14 +1598,17 @@ function updateSourceBadge(results) {
   const el = document.getElementById("sourceBadge");
   if (!el || !results || !results.length) { el && (el.style.display="none"); return; }
   const valid = results.filter(r => !r.error);
-  const hasAlpaca = valid.some(r => r.price_source === "Alpaca");
-  const hasYahoo  = valid.some(r => r.price_source !== "Alpaca");
+  const hasAlpaca   = valid.some(r => r.price_source === "Alpaca");
+  const hasShioaji  = valid.some(r => r.price_source === "Shioaji");
+  const hasYahoo    = valid.some(r => r.price_source === "Yahoo" || !r.price_source);
+  const realtime    = hasAlpaca || hasShioaji;
   let label, bg, color, border;
-  if (hasAlpaca && hasYahoo) {
-    label  = "🟢 Alpaca + Yahoo";
-    bg     = "#0d2a1a"; color = "#3fb950"; border = "#238636";
-  } else if (hasAlpaca) {
-    label  = "🟢 Alpaca IEX (即時)";
+  if (realtime) {
+    const parts = [];
+    if (hasAlpaca)  parts.push("Alpaca");
+    if (hasShioaji) parts.push("Shioaji");
+    if (hasYahoo)   parts.push("Yahoo");
+    label  = "🟢 " + parts.join(" + ") + " (即時)";
     bg     = "#0d2a1a"; color = "#3fb950"; border = "#238636";
   } else {
     label  = "🟡 Yahoo Finance";

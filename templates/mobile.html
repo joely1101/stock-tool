@@ -1096,12 +1096,18 @@ function updateSourceBadge(results) {
   const el = document.getElementById("mSrcBadge");
   if (!el || !results || !results.length) { el && (el.style.display="none"); return; }
   const valid = results.filter(r => !r.error);
-  const hasAlpaca = valid.some(r => r.price_source === "Alpaca");
-  const hasYahoo  = valid.some(r => r.price_source !== "Alpaca");
+  const hasAlpaca   = valid.some(r => r.price_source === "Alpaca");
+  const hasShioaji  = valid.some(r => r.price_source === "Shioaji");
+  const hasYahoo    = valid.some(r => r.price_source === "Yahoo" || !r.price_source);
+  const realtime    = hasAlpaca || hasShioaji;
   let label, color;
-  if (hasAlpaca && hasYahoo) { label="🟢 Alpaca + Yahoo"; color="#3fb950"; }
-  else if (hasAlpaca)        { label="🟢 Alpaca IEX (即時)"; color="#3fb950"; }
-  else                       { label="🟡 Yahoo Finance"; color="#e3b341"; }
+  if (realtime) {
+    const parts = [];
+    if (hasAlpaca)  parts.push("Alpaca");
+    if (hasShioaji) parts.push("Shioaji");
+    if (hasYahoo)   parts.push("Yahoo");
+    label = "🟢 " + parts.join(" + ") + " (即時)"; color = "#3fb950";
+  } else { label = "🟡 Yahoo Finance"; color = "#e3b341"; }
   el.textContent = label;
   el.style.color = color;
   el.style.display = "block";

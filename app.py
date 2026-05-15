@@ -338,7 +338,33 @@ def sync_profile(name):
     for s in stocks:
         _cache.delete(f"stock:{s.upper()}")
 
-    # Parallel fetch — 8 workers; ~8× faster than sequential
+    # ── Batch prefetch: ONE API call each for Alpaca (US) and Shioaji (TW) ──
+    us_syms  = [s for s in stocks if not _TW_SYM.match(s.upper())]
+    tw_codes = [re.sub(r'\.(TW[O]?)$', '', s, flags=re.IGNORECASE)
+                for s in stocks if _TW_SYM.match(s.upper())]
+
+    def _do_alpaca():
+        try:
+            from alpaca_data import prefetch_us_snapshots
+            prefetch_us_snapshots(us_syms)
+        except Exception:
+            pass
+
+    def _do_shioaji():
+        try:
+            from shioaji_data import prefetch_tw_snapshots
+            prefetch_tw_snapshots(tw_codes)
+        except Exception:
+            pass
+
+    # Run both prefetches concurrently — total wait = max(alpaca, shioaji) not sum
+    with ThreadPoolExecutor(max_workers=2) as ex:
+        f1 = ex.submit(_do_alpaca)  if us_syms  else None
+        f2 = ex.submit(_do_shioaji) if tw_codes else None
+        if f1: f1.result()
+        if f2: f2.result()
+
+    # Parallel fetch — up to 16 workers (Oracle has 6 cores; GCP capped at 8)
     def _fetch_one(sym):
         is_tw = bool(_TW_SYM.match(sym.upper()))
         ttl   = TTL_TW_STOCK if is_tw else TTL_US_STOCK
@@ -346,7 +372,7 @@ def sync_profile(name):
             f"stock:{sym.upper()}", lambda s=sym: analyze_stock(s), ttl
         )
 
-    max_w   = min(8, len(stocks))
+    max_w   = min(16, len(stocks))
     with ThreadPoolExecutor(max_workers=max_w) as ex:
         raw = list(ex.map(_fetch_one, stocks))
     results = sort_results(raw)
