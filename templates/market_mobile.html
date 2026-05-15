@@ -109,6 +109,15 @@
       --bg:#fffbe8; --bg2:#fef9df; --bg3:#fdf7d7;
       --border:#f3eac1; --text:#1e1400; --muted:#503800; --dim:#8d7318;
     }
+    .spinner { display:flex; justify-content:center; align-items:center; padding:0.5rem 0; }
+    .spinner-ring {
+      width:22px; height:22px;
+      border:2px solid #30363d;
+      border-top-color:#58a6ff;
+      border-radius:50%;
+      animation:spin-ring 0.75s linear infinite;
+    }
+    @keyframes spin-ring { to { transform:rotate(360deg); } }
   </style>
 </head>
 <body>
@@ -130,7 +139,7 @@
 </div>
 
 <div class="main" id="main">
-  <div class="spinner">⏳ 載入中…</div>
+  <div class="spinner"><div class="spinner-ring"></div></div>
 </div>
 
 <div class="bottombar">
@@ -155,7 +164,7 @@ function switchMarket(m) {
 
 async function loadMarket(market) {
   const seq = ++_loadSeq;
-  document.getElementById("main").innerHTML = `<div class="spinner">⏳ 載入中…</div>`;
+  document.getElementById("main").innerHTML = `<div class="spinner"><div class="spinner-ring"></div></div>`;
   try {
     const res  = await fetch(`/market/data?market=${market}`);
     const data = await res.json();

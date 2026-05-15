@@ -208,8 +208,21 @@
     .btn-sm     { padding: 0.38rem 0.7rem; font-size: 0.8rem; min-height: 34px; }
 
     /* ── spinner / error ── */
-    .spinner { display: none; text-align: center; color: var(--muted); padding: 2rem; font-size: 0.9rem; }
-    .spinner.visible { display: block; }
+    .spinner {
+      display: none;
+      justify-content: center;
+      align-items: center;
+      padding: 0.5rem 0;
+    }
+    .spinner.visible { display: flex; }
+    .spinner-ring {
+      width: 22px; height: 22px;
+      border: 2px solid var(--border);
+      border-top-color: var(--blue);
+      border-radius: 50%;
+      animation: spin-ring 0.75s linear infinite;
+    }
+    @keyframes spin-ring { to { transform: rotate(360deg); } }
     .error-msg {
       background: #1c1c1c; border: 1px solid #3d1515;
       border-radius: 8px; padding: 0.65rem 1rem;
@@ -511,7 +524,7 @@
     </div>
   </div>
 
-  <div class="spinner" id="spinner">⏳ 資料載入中，請稍候…</div>
+  <div class="spinner" id="spinner"><div class="spinner-ring"></div></div>
   <div class="error-msg" id="errorMsg"></div>
   <div id="cardList">
     <div class="empty-state">點選上方組合或搜尋個股</div>
@@ -592,7 +605,6 @@ function renderDrawer() {
           <div class="profile-item-name">${esc(name)}</div>
           <div class="profile-item-meta">${p.stocks.length} 檔 · ${sync}</div>
         </div>
-        <span class="profile-item-del" data-del="${esc(name)}">✕</span>
       </div>`;
   }).join("");
 

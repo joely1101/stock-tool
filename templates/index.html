@@ -428,12 +428,19 @@
     /* ── spinner / error ── */
     .spinner {
       display: none;
-      text-align: center;
-      color: var(--muted);
-      font-size: 0.88rem;
-      padding: 0.5rem;
+      justify-content: center;
+      align-items: center;
+      padding: 0.5rem 0;
     }
-    .spinner.visible { display: block; }
+    .spinner.visible { display: flex; }
+    .spinner-ring {
+      width: 22px; height: 22px;
+      border: 2px solid var(--border);
+      border-top-color: var(--blue);
+      border-radius: 50%;
+      animation: spin-ring 0.75s linear infinite;
+    }
+    @keyframes spin-ring { to { transform: rotate(360deg); } }
     .error-msg {
       color: var(--red);
       background: #1c1c1c;
@@ -845,7 +852,6 @@
         <span id="sourceBadge" style="display:none; font-size:0.75rem; font-weight:600;
           padding:0.2rem 0.6rem; border-radius:5px; white-space:nowrap;"></span>
         <button class="btn btn-ghost" id="exportBtn" onclick="exportCSV()" title="匯出目前資料為 CSV">⬇ 匯出 CSV</button>
-        <button class="btn btn-danger" id="deleteProfileBtn" onclick="confirmDeleteProfile()">刪除組合</button>
         <button class="profile-fold-btn" id="profileFoldBtn" onclick="toggleProfileHeader()" title="管理股票清單">⚙ 管理</button>
       </div>
       <div class="stock-chips" id="activeProfileChips"></div>
@@ -860,7 +866,7 @@
       </div>
     </div>
 
-    <div class="spinner" id="spinner">⏳ 資料載入中，請稍候…</div>
+    <div class="spinner" id="spinner"><div class="spinner-ring"></div></div>
     <div class="error-msg"  id="errorMsg"></div>
 
     <div class="table-wrap">
@@ -970,7 +976,6 @@ function renderSidebar() {
         </div>
         <div class="profile-card-btns">
           <button class="icon-btn" data-action="rename" data-name="${escHtml(name)}" title="重新命名">✎</button>
-          <button class="icon-btn danger" data-action="delete" data-name="${escHtml(name)}" title="刪除">✕</button>
         </div>
       </div>`;
   }).join("");

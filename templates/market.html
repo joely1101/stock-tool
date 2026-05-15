@@ -103,7 +103,15 @@
     .sector-pct  { font-size:0.8rem; font-weight:600; min-width:55px; text-align:right; }
 
     /* ── spinner ── */
-    .spinner { text-align:center; color:var(--muted); padding:2rem; font-size:0.85rem; }
+        .spinner { display:flex; justify-content:center; align-items:center; padding:1.5rem; }
+    .spinner-ring {
+      width:22px; height:22px;
+      border:2px solid var(--border);
+      border-top-color:var(--blue);
+      border-radius:50%;
+      animation:spin-ring 0.75s linear infinite;
+    }
+    @keyframes spin-ring { to { transform:rotate(360deg); } }
     .error-row td { color:var(--red); font-size:0.82rem; text-align:center; padding:1rem; }
 
     /* ── news section ── */
@@ -191,10 +199,10 @@ async function loadMarket(market) {
   const seq  = ++_loadSeq;           // capture this request's sequence number
   const grid = document.getElementById("mainGrid");
   grid.innerHTML = `
-    <div class="section"><div class="spinner">⏳ 載入中…</div></div>
-    <div class="section"><div class="spinner">⏳ 載入中…</div></div>
-    <div class="section"><div class="spinner">⏳ 載入中…</div></div>
-    <div class="section"><div class="spinner">⏳ 載入中…</div></div>`;
+    <div class="section"><div class="spinner"><div class="spinner-ring"></div></div></div>
+    <div class="section"><div class="spinner"><div class="spinner-ring"></div></div></div>
+    <div class="section"><div class="spinner"><div class="spinner-ring"></div></div></div>
+    <div class="section"><div class="spinner"><div class="spinner-ring"></div></div></div>`;
 
   try {
     const res  = await fetch(`/market/data?market=${market}`);

@@ -88,7 +88,15 @@
     .pct-call { background:var(--green); }
 
     /* spinner / error */
-    .spinner  { text-align:center; color:var(--muted); padding:3rem; font-size:.9rem; }
+        .spinner  { display:flex; justify-content:center; align-items:center; padding:1.5rem; }
+    .spinner-ring {
+      width:22px; height:22px;
+      border:2px solid var(--border);
+      border-top-color:var(--blue);
+      border-radius:50%;
+      animation:spin-ring 0.75s linear infinite;
+    }
+    @keyframes spin-ring { to { transform:rotate(360deg); } }
     .err-row td { color:var(--red); font-size:.82rem; }
 
     /* themes */
@@ -166,7 +174,7 @@
 </div>
 
 <div class="table-wrap">
-  <div class="spinner" id="spinner">⏳ 載入選擇權資料中，請稍候…</div>
+  <div class="spinner" id="spinner"><div class="spinner-ring"></div></div>
   <table id="optTable" style="display:none">
     <thead>
       <tr>
