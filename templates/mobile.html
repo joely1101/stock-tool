@@ -997,7 +997,7 @@ function renderCards(results) {
             </div>
           </div>
         </div>
-        <button class="ma-card-btn" onclick="openMAChart('${esc(r.symbol)}',${r.is_taiwan?'true':'false'})">📈 MA 均線圖</button>
+        <button class="ma-card-btn" onclick="openMAChart('${esc(r.symbol)}',${r.is_taiwan?'true':'false'},'${esc(r.company_name)}')">📈 MA 均線圖</button>
       </div>`;
   }).join("");
 }
@@ -1258,10 +1258,11 @@ const MA_PRESETS = [
 
 let _maSym="", _maPeriod="6mo", _maPreset=null, _maChart=null, _maData=null;
 
-function openMAChart(sym, isTaiwan) {
+function openMAChart(sym, isTaiwan, companyName) {
   _maSym=sym; _maPeriod="6mo";
   _maPreset = MA_PRESETS.find(p=>p.id===(isTaiwan?"tw_short":"us_momentum"));
-  document.getElementById("maTitle").textContent="📈 "+sym+" — MA Chart";
+  const title = companyName ? sym+" — "+companyName : sym;
+  document.getElementById("maTitle").textContent="📈 "+title;
   document.getElementById("maOverlay").classList.add("open");
   _buildMAPresets(); _setActivePeriod("6mo"); loadMAChart();
 }

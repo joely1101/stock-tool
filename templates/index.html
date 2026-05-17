@@ -1292,7 +1292,7 @@ function renderRows(results) {
         </span>
       </td>
       <td>${upsideHtml(r.upside_pct, r.target_price_fmt)}
-        <button class="ma-btn" onclick="openMAChart('${escHtml(r.symbol)}',${r.is_taiwan?'true':'false'})">📈 MA</button>
+        <button class="ma-btn" onclick="openMAChart('${escHtml(r.symbol)}',${r.is_taiwan?'true':'false'},'${escHtml(r.company_name)}')">📈 MA</button>
       </td>
       <td class="col-sep pe">${r.forward_pe_fmt}</td>
       <td>${pegHtml(r.peg_fmt, r.peg_ratio)}</td>
@@ -1896,13 +1896,13 @@ const MA_PRESETS = [
 
 let _maSym="", _maPeriod="6mo", _maPreset=null, _maChart=null, _maData=null;
 
-function openMAChart(sym, isTaiwan) {
+function openMAChart(sym, isTaiwan, companyName) {
   _maSym = sym;
   _maPeriod = "6mo";
-  // auto-select preset by market
   const defaultPreset = isTaiwan ? "tw_short" : "us_momentum";
   _maPreset = MA_PRESETS.find(p => p.id === defaultPreset);
-  document.getElementById("maTitle").textContent = "📈 " + sym + " — MA Chart";
+  const title = companyName ? sym + " — " + companyName : sym;
+  document.getElementById("maTitle").textContent = "📈 " + title;
   document.getElementById("maOverlay").classList.add("open");
   _buildPresetBtns();
   _setActivePeriod("6mo");
