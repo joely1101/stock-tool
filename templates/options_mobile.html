@@ -298,7 +298,7 @@ function updateOptSrc(rows) {
   const hasAlpaca = valid.some(r => r.price_source === "Alpaca");
   const hasYahoo  = valid.some(r => r.price_source !== "Alpaca");
   let label, bg, color;
-  if (hasAlpaca) { label="💹 價格 Alpaca IEX (即時)"; bg="#0d2a1a"; color="#3fb950"; }
+  if (hasAlpaca) { label="💹 價格 Alpaca IEX"; bg="#0d2a1a"; color="#3fb950"; }
   else           { label="💹 Yahoo Finance (15分鐘延遲)"; bg="#1c2128"; color="#e3b341"; }
   el.textContent = label;
   el.style.cssText = `display:inline;background:${bg};color:${color};padding:.1rem .4rem;border-radius:4px;font-size:.68rem;font-weight:600;`;

@@ -1139,7 +1139,7 @@ function updateSourceBadge(results) {
     if (hasAlpaca)  parts.push("Alpaca");
     if (hasShioaji) parts.push("Shioaji");
     if (hasYahoo)   parts.push("Yahoo");
-    label = "🟢 " + parts.join(" + ") + " (即時)"; color = "#3fb950";
+    label = "🟢 " + parts.join(" + "); color = "#3fb950";
   } else { label = "🟡 Yahoo Finance"; color = "#e3b341"; }
   el.textContent = label;
   el.style.color = color;
