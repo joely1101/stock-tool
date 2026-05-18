@@ -341,7 +341,10 @@ def market_data_api():
 def analyze():
     data = request.get_json()
     symbols_raw = data.get("symbols", "")
-    symbols = [s.strip() for s in symbols_raw.replace(",", " ").split() if s.strip()]
+    if isinstance(symbols_raw, list):
+        symbols = [str(s).strip() for s in symbols_raw if str(s).strip()]
+    else:
+        symbols = [s.strip() for s in str(symbols_raw).replace(",", " ").split() if s.strip()]
     if not symbols:
         return jsonify({"error": "請輸入至少一個股票代碼。"})
 
