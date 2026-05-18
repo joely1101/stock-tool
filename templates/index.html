@@ -626,6 +626,21 @@
     .detail-grid {
       display: flex; flex-wrap: wrap; gap: 0.6rem;
     }
+
+    /* ── News section ── */
+    .news-section { margin-top:.75rem; border-top:1px solid var(--border); padding-top:.6rem; }
+    .news-section-title { font-size:.7rem; font-weight:700; color:var(--dim);
+                          text-transform:uppercase; letter-spacing:.06em; margin-bottom:.4rem; }
+    .news-list { display:flex; flex-direction:column; gap:.3rem; }
+    .news-item { display:flex; align-items:baseline; gap:.5rem; font-size:.8rem; }
+    .news-item a { color:var(--text); text-decoration:none; flex:1;
+                   overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+    .news-item a:hover { color:var(--blue); text-decoration:underline; }
+    .news-src  { font-size:.68rem; color:var(--dim); white-space:nowrap;
+                 background:var(--bg3); border-radius:3px; padding:.05rem .3rem; }
+    .news-time { font-size:.68rem; color:var(--dim); white-space:nowrap; }
+    .news-loading { display:flex; align-items:center; gap:.4rem;
+                    font-size:.78rem; color:var(--dim); padding:.3rem 0; }
     .dg-group {
       background: var(--bg2); border: 1px solid var(--border);
       border-radius: 8px; padding: 0.55rem 0.75rem; min-width: 155px;
@@ -1313,18 +1328,54 @@ function renderRows(results) {
         <button class="expand-btn" id="exp-btn-${i}" onclick="toggleDetail(${i})">▼</button>
       </td>
     </tr>
-    <tr class="detail-row" id="detail-${i}" style="display:none">
+    <tr class="detail-row" id="detail-${i}" data-sym="${escHtml(r.display_symbol||r.symbol)}" style="display:none">
       <td colspan="14">${detailHtml(r)}</td>
     </tr>`;
   }).join("");
 }
 
 function toggleDetail(i) {
-  const row = document.getElementById(`detail-${i}`);
-  const btn = document.getElementById(`exp-btn-${i}`);
+  const row  = document.getElementById(`detail-${i}`);
+  const btn  = document.getElementById(`exp-btn-${i}`);
   const open = row.style.display === "table-row";
   row.style.display = open ? "none" : "table-row";
   btn.textContent   = open ? "▼" : "▲";
+  if (!open) loadStockNews(row.dataset.sym);
+}
+
+const _newsLoaded = new Set();
+async function loadStockNews(sym) {
+  if (!sym || _newsLoaded.has(sym)) return;
+  const el = document.getElementById(`news-${sym}`);
+  if (!el) return;
+  _newsLoaded.add(sym);
+  try {
+    const data = await fetch(`/news?symbol=${encodeURIComponent(sym)}`).then(r => r.json());
+    if (!data.articles || !data.articles.length) {
+      el.innerHTML = `<div class="news-section-title">📰 相關新聞</div><span style="font-size:.78rem;color:var(--dim);">暫無新聞</span>`;
+      return;
+    }
+    const now = Math.floor(Date.now() / 1000);
+    const fmtTime = ts => {
+      if (!ts) return "";
+      const diff = now - ts;
+      if (diff < 3600)  return Math.floor(diff/60) + "分鐘前";
+      if (diff < 86400) return Math.floor(diff/3600) + "小時前";
+      return Math.floor(diff/86400) + "天前";
+    };
+    el.innerHTML = `
+      <div class="news-section-title">📰 相關新聞</div>
+      <div class="news-list">
+        ${data.articles.map(a => `
+          <div class="news-item">
+            <a href="${a.url}" target="_blank" rel="noopener" title="${a.title}">${a.title}</a>
+            <span class="news-src">${a.source}</span>
+            <span class="news-time">${fmtTime(a.time)}</span>
+          </div>`).join("")}
+      </div>`;
+  } catch(e) {
+    el.innerHTML = `<span style="font-size:.78rem;color:var(--red);">新聞載入失敗</span>`;
+  }
 }
 
 function dgTag(text, type) {
@@ -1417,6 +1468,9 @@ function detailHtml(r) {
       </div>
       <div class="dg-hint">ℹ️ ROE&gt;15%管理效率佳 · D/E&lt;0.5財務穩健</div>
     </div>
+  </div>
+  <div class="news-section" id="news-${escHtml(r.display_symbol||r.symbol)}">
+    <div class="news-loading"><div class="spinner-ring" style="width:14px;height:14px;border-width:2px;display:inline-block;"></div>&nbsp;載入新聞中…</div>
   </div>`;
 }
 

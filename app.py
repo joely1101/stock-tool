@@ -263,6 +263,115 @@ def options_oi():
         return jsonify({"error": str(e)}), 500
 
 
+@app.route("/news")
+def stock_news():
+    import yfinance as yf
+    import urllib.request
+    import xml.etree.ElementTree as ET
+    from urllib.parse import quote
+    from email.utils import parsedate_to_datetime
+
+    sym = request.args.get("symbol", "").strip().upper()
+    if not sym:
+        return jsonify({"error": "symbol required"}), 400
+
+    cached = _cache.get(f"news:{sym}")
+    if cached:
+        return jsonify(cached)
+
+    is_tw  = bool(_TW_SYM.match(sym))
+    yf_sym = (sym + ".TW") if is_tw else sym
+    articles, seen = [], set()
+
+    def _add(title, url, source, ts=0):
+        t = (title or "").strip()
+        if not t or t in seen or not url:
+            return
+        seen.add(t)
+        articles.append({"title": t, "url": url, "source": source, "time": int(ts)})
+
+    headers = {"User-Agent": "Mozilla/5.0 (compatible; StockTool/1.0)"}
+
+    def _fetch_url(url, timeout=5):
+        req = urllib.request.Request(url, headers=headers)
+        with urllib.request.urlopen(req, timeout=timeout) as r:
+            return r.read()
+
+    # ── 1. yfinance news ──────────────────────────────────────────────────────
+    try:
+        news_items = yf.Ticker(yf_sym).news or []
+        for item in news_items[:8]:
+            _add(item.get("title", ""),
+                 item.get("link") or item.get("url", ""),
+                 item.get("publisher", "Yahoo Finance"),
+                 item.get("providerPublishTime", 0))
+    except Exception:
+        pass
+
+    # ── 2. 鉅亨網 (TW stocks) ─────────────────────────────────────────────────
+    if is_tw:
+        try:
+            code = re.sub(r'\.(TW[O]?)$', '', sym, flags=re.IGNORECASE)
+            url  = f"https://api.cnyes.com/media/api/v1/search?keyword={code}&type=news&limit=8"
+            data = json.loads(_fetch_url(url))
+            for item in data.get("items", {}).get("data", []):
+                nid = item.get("newsId") or item.get("id", "")
+                _add(item.get("title", ""),
+                     f"https://news.cnyes.com/news/id/{nid}",
+                     "鉅亨網",
+                     item.get("publishAt", 0))
+        except Exception:
+            pass
+
+    # ── 3. Google News RSS ────────────────────────────────────────────────────
+    try:
+        if is_tw:
+            code = re.sub(r'\.(TW[O]?)$', '', sym, flags=re.IGNORECASE)
+            q   = quote(f"{code} 股票")
+            gurl = f"https://news.google.com/rss/search?q={q}&hl=zh-TW&gl=TW&ceid=TW:zh-Hant"
+        else:
+            q   = quote(f"{sym} stock earnings")
+            gurl = f"https://news.google.com/rss/search?q={q}&hl=en-US&gl=US&ceid=US:en"
+        xml_bytes = _fetch_url(gurl, timeout=6)
+        root = ET.fromstring(xml_bytes)
+        for item in root.findall(".//item")[:8]:
+            title  = item.findtext("title", "")
+            link   = item.findtext("link", "")
+            source = item.findtext("source", "Google News")
+            pub    = item.findtext("pubDate", "")
+            ts = 0
+            try:
+                ts = int(parsedate_to_datetime(pub).timestamp())
+            except Exception:
+                pass
+            _add(title, link, source, ts)
+    except Exception:
+        pass
+
+    # ── 4. Yahoo Finance RSS (US) ─────────────────────────────────────────────
+    if not is_tw:
+        try:
+            rurl = f"https://feeds.finance.yahoo.com/rss/2.0/headline?s={sym}&region=US&lang=en-US"
+            xml_bytes = _fetch_url(rurl, timeout=5)
+            root = ET.fromstring(xml_bytes)
+            for item in root.findall(".//item")[:6]:
+                title  = item.findtext("title", "")
+                link   = item.findtext("link", "")
+                pub    = item.findtext("pubDate", "")
+                ts = 0
+                try:
+                    ts = int(parsedate_to_datetime(pub).timestamp())
+                except Exception:
+                    pass
+                _add(title, link, "Yahoo Finance", ts)
+        except Exception:
+            pass
+
+    articles.sort(key=lambda x: x["time"], reverse=True)
+    result = {"symbol": sym, "articles": articles[:12]}
+    _cache.set(f"news:{sym}", result, ttl=600)   # cache 10 min
+    return jsonify(result)
+
 @app.route("/chart/ma")
 def chart_ma():
     import yfinance as yf
