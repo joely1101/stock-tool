@@ -348,6 +348,28 @@
       gap: 1px; background: var(--border);
     }
 
+    /* ── List view ── */
+    .list-view-wrap { border:1px solid var(--border); border-radius:10px; overflow:hidden; }
+    .list-row {
+      display:flex; align-items:center; gap:0.4rem;
+      padding:0.42rem 0.65rem; border-bottom:1px solid var(--border);
+      background:var(--bg2); min-width:0;
+    }
+    .list-row:last-child { border-bottom:none; }
+    .list-row:active { background:var(--bg3); }
+    .list-sym  { font-weight:700; color:var(--blue); font-size:0.82rem;
+                 white-space:nowrap; min-width:2.6rem; }
+    .list-name { flex:1; font-size:0.7rem; color:var(--muted);
+                 overflow:hidden; text-overflow:ellipsis; white-space:nowrap; min-width:0; }
+    .list-price { font-weight:700; font-size:0.85rem; white-space:nowrap; }
+    .list-chg   { font-size:0.75rem; font-weight:600; white-space:nowrap;
+                  min-width:3.8rem; text-align:right; }
+    .list-target{ font-size:0.7rem; color:var(--dim); white-space:nowrap;
+                  min-width:3rem; text-align:right; }
+    .list-err { padding:0.5rem 0.75rem; color:var(--red); font-size:0.78rem;
+                background:var(--bg2); border-bottom:1px solid var(--border); }
+    .view-toggle-btn.active { background:var(--bg3); color:var(--text); border-color:var(--muted); }
+
     /* ── bottom action bar ── */
     .bottombar {
       height: var(--bottombar-h); min-height: var(--bottombar-h);
@@ -539,6 +561,7 @@
       <button class="btn btn-sync btn-sm" id="syncBtn" onclick="syncProfile()">⟳ 同步</button>
       <button class="btn btn-ghost btn-sm" id="autoSyncBtn" onclick="toggleAutoSync()" title="每30秒自動同步">⏱ 自動</button>
       <span id="autoSyncCountdown" style="font-size:0.68rem;color:var(--dim);display:none;"></span>
+      <button class="btn btn-ghost btn-sm view-toggle-btn" id="viewToggleBtn" onclick="toggleViewMode()">☰ 列表</button>
       <button class="btn btn-ghost btn-sm" onclick="exportCSV()">⬇ CSV</button>
     </div>
     <div id="mMktStatus" style="display:none;padding:0 0.75rem 0.3rem;font-size:0.7rem;display:none;gap:0.4rem;flex-wrap:wrap;"></div>
@@ -666,7 +689,7 @@ async function selectProfile(name) {
   if (data.error) { showError(data.error); return; }
   renderChips(data.stocks);
   document.getElementById("syncTime").textContent = data.last_sync ? `上次同步：${data.last_sync}` : "";
-  if (data.cache && data.cache.length) { renderCards(data.cache); updateSourceBadge(data.cache); }
+  if (data.cache && data.cache.length) { renderResults(data.cache); updateSourceBadge(data.cache); }
   else document.getElementById("cardList").innerHTML = `<div class="empty-state">尚未同步，請按「⟳ 同步」</div>`;
 }
 
@@ -690,7 +713,7 @@ async function syncProfile() {
     profilesData[activeProfile].last_sync = data.last_sync;
     renderDrawer();
     document.getElementById("syncTime").textContent = `上次同步：${data.last_sync}`;
-    renderCards(data.results);
+    renderResults(data.results);
     updateSourceBadge(data.results);
   } catch { showError("同步失敗"); }
   finally { btn.disabled=false; btn.textContent="⟳ 同步"; showSpinner(false); }
@@ -745,7 +768,7 @@ async function adhocAnalyze() {
     });
     const data = await res.json();
     if (data.error) { showError(data.error); return; }
-    renderCards(data.results);
+    renderResults(data.results);
     toggleSearch(false);
   } catch { showError("查詢失敗"); }
   finally { showSpinner(false); }
@@ -893,6 +916,52 @@ async function importFileToProfile(inp) {
 }
 
 /* ── render cards ── */
+/* ── View mode toggle ── */
+let _viewMode = localStorage.getItem("mobileViewMode") || "card"; // "card" | "list"
+function renderResults(results) {
+  _viewMode === "list" ? renderListView(results) : renderCards(results);
+}
+
+function toggleViewMode() {
+  _viewMode = _viewMode === "card" ? "list" : "card";
+  localStorage.setItem("mobileViewMode", _viewMode);
+  _updateViewToggleBtn();
+  if (currentResults && currentResults.length) {
+    _viewMode === "list" ? renderListView(currentResults) : renderCards(currentResults);
+  }
+}
+function _updateViewToggleBtn() {
+  const btn = document.getElementById("viewToggleBtn");
+  if (!btn) return;
+  if (_viewMode === "list") {
+    btn.textContent = "🃏 卡片";
+    btn.classList.add("active");
+  } else {
+    btn.textContent = "☰ 列表";
+    btn.classList.remove("active");
+  }
+}
+
+function renderListView(results) {
+  currentResults = results;
+  const list = document.getElementById("cardList");
+  if (!results.length) { list.innerHTML=`<div class="empty-state">無資料</div>`; return; }
+  list.innerHTML = `<div class="list-view-wrap">` + results.map(r => {
+    if (r.error) return `<div class="list-err"><b>${esc(r.symbol)}</b>：${esc(r.error)}</div>`;
+    const chgCls = (r.day_chg_pct||0) >= 0 ? "pos" : "neg";
+    const chgTxt = `${r.day_change_fmt||''} (${r.day_chg_pct_fmt||''})`;
+    const upCls  = (r.upside_pct||0) >= 0 ? "pos" : "neg";
+    const upTxt  = r.upside_pct != null ? `${r.upside_pct>0?"+":""}${r.upside_pct}%` : "";
+    return `<div class="list-row">
+      <span class="list-sym">${esc(r.display_symbol||r.symbol)}</span>
+      <span class="list-name">${esc(r.company_name)}</span>
+      <span class="list-price">${r.current_price_fmt}</span>
+      <span class="list-chg ${chgCls}">${chgTxt}</span>
+      <span class="list-target ${upCls}">${r.target_price_fmt}${upTxt?" ("+upTxt+")":""}</span>
+    </div>`;
+  }).join("") + `</div>`;
+}
+
 function renderCards(results) {
   currentResults = results;
   const list = document.getElementById("cardList");
@@ -1170,6 +1239,7 @@ function closeThemeSheet() {
 document.querySelectorAll(".theme-opt").forEach(el =>
   el.addEventListener("click", () => { applyTheme(el.dataset.theme); closeThemeSheet(); }));
 applyTheme(localStorage.getItem("theme") || "dark");
+_updateViewToggleBtn();
 
 if ("serviceWorker" in navigator)
   navigator.serviceWorker.register("/static/sw.js").catch(()=>{});
