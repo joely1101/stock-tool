@@ -631,6 +631,7 @@ def analyze_stock(symbol: str) -> dict:
             ),
             "target_price": target_price,
             "target_price_fmt": _fmt_price(target_price, currency) if target_price else "N/A",
+            "forward_pe":     forward_pe,
             "forward_pe_fmt": f"{forward_pe:.0f}x" if forward_pe else "N/A",
             "rsi": rsi,
             "rsi_fmt": str(int(rsi)) if (rsi is not None and rsi == rsi) else "N/A",
@@ -645,6 +646,7 @@ def analyze_stock(symbol: str) -> dict:
             "pct_from_52w_high_fmt": (
                 f"{pct_from_52w_high:+.1f}%" if pct_from_52w_high is not None else "N/A"
             ),
+            "next_earnings_ts":  int(next_earnings.timestamp()) if next_earnings else None,
             "next_earnings_fmt": (
                 next_earnings.strftime("%-m/%-d") if next_earnings else "N/A"
             ),

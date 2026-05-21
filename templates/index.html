@@ -425,6 +425,11 @@
     .add-stock-wrap input:focus { border-color: var(--blue); }
     .add-stock-wrap input::placeholder { color: var(--dim); }
 
+    /* ── Sortable headers ── */
+    .sort-th { cursor:pointer; user-select:none; white-space:nowrap; }
+    .sort-th:hover { color:var(--text); background:var(--bg3); }
+    .sort-icon { font-size:.7em; margin-left:.25em; color:var(--blue); }
+
     /* ── Stock autocomplete dropdown ── */
     .ac-wrap { position: relative; }
     .ac-drop  { position:absolute; top:calc(100% + 3px); left:0; min-width:260px;
@@ -953,18 +958,18 @@
             <th colspan="2" style="border-left:1px solid var(--border);"></th>
           </tr>
           <tr>
-            <th>股票代碼</th>
-            <th>目前市價 <span style="font-weight:400;font-size:0.7em;color:var(--dim);">(USD/TWD)</span></th>
-            <th>目標價 (Avg)</th>
-            <th class="col-sep">前瞻 PE</th>
-            <th>PEG</th>
-            <th class="col-sep">RSI</th>
-            <th>MACD</th>
-            <th>距52W高</th>
-            <th class="col-sep">財報日</th>
-            <th>營收成長 YoY</th>
-            <th>分析師 / 買入%</th>
-            <th class="col-sep">投資建議</th>
+            <th class="sort-th" data-col="symbol"  onclick="sortByCol('symbol')">股票代碼</th>
+            <th class="sort-th" data-col="price"   onclick="sortByCol('price')">目前市價 <span style="font-weight:400;font-size:0.7em;color:var(--dim);">(USD/TWD)</span></th>
+            <th class="sort-th" data-col="upside"  onclick="sortByCol('upside')">目標價 (Avg)</th>
+            <th class="sort-th col-sep" data-col="pe"  onclick="sortByCol('pe')">前瞻 PE</th>
+            <th class="sort-th" data-col="peg"     onclick="sortByCol('peg')">PEG</th>
+            <th class="sort-th col-sep" data-col="rsi" onclick="sortByCol('rsi')">RSI</th>
+            <th class="sort-th" data-col="macd"    onclick="sortByCol('macd')">MACD</th>
+            <th class="sort-th" data-col="52w"     onclick="sortByCol('52w')">距52W高</th>
+            <th class="sort-th col-sep" data-col="earnings" onclick="sortByCol('earnings')">財報日</th>
+            <th class="sort-th" data-col="rev"     onclick="sortByCol('rev')">營收成長 YoY</th>
+            <th class="sort-th" data-col="analyst" onclick="sortByCol('analyst')">分析師 / 買入%</th>
+            <th class="sort-th col-sep" data-col="rec" onclick="sortByCol('rec')">投資建議</th>
             <th>核心評論</th>
             <th style="width:36px;"></th>
           </tr>
@@ -1314,6 +1319,10 @@ function renderRows(results) {
   currentResults = results;
   document.getElementById("resultTableWrap").style.display = "";
   document.getElementById("emptyMsg").style.display = "none";
+  _doRenderRows(_applySortOrder(results));
+  _updateSortIndicators();
+}
+function _doRenderRows(results) {
   document.getElementById("resultBody").innerHTML = results.map((r, i) => {
     if (r.error) return `
       <tr>
@@ -1357,7 +1366,7 @@ function renderRows(results) {
       <td colspan="14">${detailHtml(r)}</td>
     </tr>`;
   }).join("");
-}
+}  // end _doRenderRows
 
 function toggleDetail(i) {
   const row  = document.getElementById(`detail-${i}`);
@@ -1928,6 +1937,73 @@ document.getElementById("themePanel").addEventListener("click", e => {
   e.stopPropagation();
 });
 applyTheme(localStorage.getItem("theme") || "dark");
+
+// ── Column sort ──────────────────────────────────────────────────────────────
+let _sortCol = null, _sortDir = 'desc';
+
+const _REC_ORDER = {'strong_buy':5,'buy':4,'hold':3,'underperform':2,'sell':1};
+
+function _getSortVal(r, col) {
+  switch(col) {
+    case 'symbol':   return (r.display_symbol || r.symbol || '').toUpperCase();
+    case 'price':    return r.current_price;
+    case 'upside':   return r.upside_pct;
+    case 'pe':       return r.forward_pe;
+    case 'peg':      return r.peg_ratio;
+    case 'rsi':      return r.rsi;
+    case 'macd':     return r.macd_bullish === true ? 1 : r.macd_bullish === false ? 0 : -1;
+    case '52w':      return r.pct_from_52w_high;
+    case 'earnings': return r.next_earnings_ts;
+    case 'rev':      return r.rev_growth;
+    case 'analyst':  return r.buy_pct;
+    case 'rec':      return _REC_ORDER[(r.recommendation||'').toLowerCase()] || 0;
+    default:         return null;
+  }
+}
+
+function _applySortOrder(results) {
+  if (!_sortCol) return results;
+  return [...results].sort((a, b) => {
+    if (a.error && !b.error) return 1;
+    if (!a.error && b.error) return -1;
+    if (a.error && b.error)  return 0;
+    const va = _getSortVal(a, _sortCol);
+    const vb = _getSortVal(b, _sortCol);
+    if (va == null && vb == null) return 0;
+    if (va == null) return 1;
+    if (vb == null) return -1;
+    const cmp = typeof va === 'string'
+      ? va.localeCompare(vb, undefined, {sensitivity:'base'})
+      : va - vb;
+    return _sortDir === 'desc' ? -cmp : cmp;
+  });
+}
+
+function sortByCol(col) {
+  if (_sortCol === col) {
+    _sortDir = _sortDir === 'desc' ? 'asc' : 'desc';
+  } else {
+    _sortCol = col;
+    _sortDir = col === 'symbol' ? 'asc' : 'desc';  // symbol defaults A→Z
+  }
+  if (currentResults && currentResults.length) {
+    _doRenderRows(_applySortOrder(currentResults));
+    _updateSortIndicators();
+  }
+}
+
+function _updateSortIndicators() {
+  document.querySelectorAll('thead th[data-col]').forEach(th => {
+    const icon = th.querySelector('.sort-icon');
+    if (icon) icon.remove();
+    if (th.dataset.col === _sortCol) {
+      const s = document.createElement('span');
+      s.className = 'sort-icon';
+      s.textContent = _sortDir === 'desc' ? ' ▼' : ' ▲';
+      th.appendChild(s);
+    }
+  });
+}
 
 // ── Stock Autocomplete ────────────────────────────────────────────────────────
 let _acStatic = null, _acTimer = null, _acIdx = -1;
