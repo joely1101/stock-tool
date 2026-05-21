@@ -537,11 +537,14 @@ def analyze_stock(symbol: str) -> dict:
                         hist = get_tw_history(_tw_code, days=180)
                     except Exception:
                         hist = pd.DataFrame()
-                # Detect stale Shioaji data: if last 15 Close values are all the same, fall back
+                # Detect stale Shioaji data: if >60% of last 30 closes are unchanged
+                # (forward-fill artifact), fall back to yfinance
                 if hist is not None and not (hasattr(hist, 'empty') and hist.empty):
-                    tail_vals = hist["Close"].tail(15)
-                    if len(tail_vals) >= 15 and tail_vals.nunique() == 1:
-                        hist = pd.DataFrame()   # force yfinance fallback
+                    tail = hist["Close"].tail(30)
+                    if len(tail) >= 14:
+                        zero_chg = (tail.diff() == 0).sum()
+                        if zero_chg / len(tail) > 0.6:
+                            hist = pd.DataFrame()   # force yfinance fallback
                 if hist is None or (hasattr(hist, 'empty') and hist.empty):
                     hist = ticker.history(period="6mo")
             if not hist.empty:
