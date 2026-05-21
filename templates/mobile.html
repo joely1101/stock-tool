@@ -325,6 +325,26 @@
     .m-news-loading { display:flex; align-items:center; gap:.35rem;
                       font-size:.74rem; color:var(--dim); }
 
+    /* ── Section index bar ── */
+    .idx-bar {
+      position: fixed; right: 3px;
+      top: calc(var(--topbar-h) + 4px);
+      bottom: calc(var(--bottombar-h) + 4px);
+      display: flex; flex-direction: column;
+      align-items: center; justify-content: center;
+      z-index: 50; gap: 1px; pointer-events: none;
+    }
+    .idx-btn {
+      font-size: 10px; font-weight: 700; line-height: 1.3;
+      color: var(--blue); background: rgba(13,17,23,.55);
+      border: none; padding: 1px 5px; border-radius: 3px;
+      cursor: pointer; pointer-events: all;
+      -webkit-tap-highlight-color: transparent;
+    }
+    .idx-btn:active { background: var(--blue); color: #fff; }
+    /* nudge card list left so last column isn't hidden under bar */
+    #cardList { padding-right: 22px; }
+
     .ma-card-btn {
       width:100%; background:none; border:none; border-top:1px solid var(--bg3);
       color:var(--green); font-size:.8rem; font-weight:600; padding:.42rem;
@@ -604,6 +624,7 @@
     <div class="empty-state">點選上方組合或搜尋個股</div>
   </div>
 </div>
+<div class="idx-bar" id="idxBar"></div>
 
 <!-- bottom action bar -->
 <div class="bottombar">
@@ -939,6 +960,31 @@ async function importFileToProfile(inp) {
 let _viewMode = localStorage.getItem("mobileViewMode") || "card"; // "card" | "list"
 function renderResults(results) {
   _viewMode === "list" ? renderListView(results) : renderCards(results);
+  buildIndexBar(results);
+}
+
+function buildIndexBar(results) {
+  const bar = document.getElementById("idxBar");
+  if (!bar) return;
+  const initials = [...new Set(
+    results.filter(r => !r.error)
+           .map(r => (r.display_symbol||r.symbol||"?")[0].toUpperCase())
+  )].sort((a,b) => {
+    // numbers first, then letters
+    const an = /\d/.test(a), bn = /\d/.test(b);
+    if (an && !bn) return -1;
+    if (!an && bn) return 1;
+    return a < b ? -1 : a > b ? 1 : 0;
+  });
+  if (initials.length < 2) { bar.innerHTML = ""; return; }
+  bar.innerHTML = initials.map(c =>
+    `<button class="idx-btn" onclick="scrollToInitial('${c}')">${c}</button>`
+  ).join("");
+}
+
+function scrollToInitial(c) {
+  const el = document.querySelector(`[data-initial="${c}"]`);
+  if (el) el.scrollIntoView({ behavior: "smooth", block: "start" });
 }
 
 function toggleViewMode() {
@@ -971,7 +1017,7 @@ function renderListView(results) {
     const chgTxt = `${r.day_change_fmt||''} (${r.day_chg_pct_fmt||''})`;
     const upCls  = (r.upside_pct||0) >= 0 ? "pos" : "neg";
     const upTxt  = r.upside_pct != null ? `${r.upside_pct>0?"+":""}${r.upside_pct}%` : "";
-    return `<div class="list-row">
+    return `<div class="list-row" data-initial="${(r.display_symbol||r.symbol||"?")[0].toUpperCase()}">
       <span class="list-sym">${esc(r.display_symbol||r.symbol)}</span>
       <span class="list-name">${esc(r.company_name)}</span>
       <span class="list-price">${r.current_price_fmt}</span>
@@ -996,8 +1042,9 @@ function renderCards(results) {
 
     const upCls = r.upside_pct>=0 ? "price-up" : "price-dn";
     const upTxt = r.upside_pct!=null ? `(${r.upside_pct>0?"+":""}${r.upside_pct}%)` : "";
+    const _ini = (r.display_symbol||r.symbol||"?")[0].toUpperCase();
     return `
-      <div class="card">
+      <div class="card" id="card-${esc(r.display_symbol||r.symbol)}" data-initial="${_ini}">
         <div class="card-top">
           <span class="symbol-badge">${esc(r.display_symbol||r.symbol)}</span>${r.is_taiwan?" 🇹🇼":""}
           <div class="card-names">
