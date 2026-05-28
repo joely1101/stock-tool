@@ -94,6 +94,27 @@
     .sig-bear { background:#3d1515; color:var(--red); }
     .sig-warn { background:#2d1f0e; color:var(--yellow); }
 
+    /* ── Score info popup ── */
+    .score-info-wrap { position:relative; display:inline-block; }
+    .score-info-btn  { background:none; border:none; cursor:pointer;
+                       color:var(--dim); font-size:.8rem; padding:0 .2rem;
+                       vertical-align:middle; line-height:1; }
+    .score-info-btn:hover { color:var(--blue); }
+    .score-popup { display:none; position:absolute; top:calc(100% + 6px); left:0;
+                   z-index:500; background:var(--bg2); border:1px solid var(--border);
+                   border-radius:10px; padding:.75rem 1rem; width:310px;
+                   box-shadow:0 8px 24px rgba(0,0,0,.5); font-size:.78rem; line-height:1.6; }
+    .score-popup.open { display:block; }
+    .score-popup h4 { font-size:.8rem; color:var(--blue); margin-bottom:.5rem; }
+    .score-popup table { width:100%; border-collapse:collapse; }
+    .score-popup td { padding:.18rem .3rem; }
+    .score-popup td:first-child { color:var(--muted); white-space:nowrap; }
+    .score-popup td:last-child  { text-align:right; font-weight:700; }
+    .score-popup .sep { border-top:1px solid var(--border); margin:.4rem 0; }
+    .sp-bull { color:var(--green); }
+    .sp-bear { color:var(--red);   }
+    .sp-note { font-size:.7rem; color:var(--dim); margin-top:.5rem; }
+
     /* momentum score badge */
     .score-badge { display:inline-block; min-width:2.4rem; text-align:center;
                    font-size:.82rem; font-weight:800; padding:.15rem .45rem;
@@ -273,7 +294,7 @@ function renderResults(all) {
     <table class="scan-table">
       <thead>
         <tr>
-          <th onclick="sortBy('score')">評分${_sortCol==='score'?' <span class="sort-icon">'+(_sortDir==='desc'?'▼':'▲')+'</span>':''}</th>
+          <th onclick="sortBy('score')">評分${_sortCol==='score'?' <span class="sort-icon">'+(_sortDir==='desc'?'▼':'▲')+'</span>':''} <span class="score-info-wrap"><button class="score-info-btn" onclick="event.stopPropagation();toggleScoreInfo()" title="評分說明">ℹ️</button><div class="score-popup" id="scorePopup"><h4>📊 動能評分說明</h4><table><tr><td>⚡ Squeeze多</td><td class="sp-bull">+3</td></tr><tr><td>🔼 趨勢轉多</td><td class="sp-bull">+3</td></tr><tr><td>🏆 破52W高</td><td class="sp-bull">+3</td></tr><tr><td>RSI脫離超賣</td><td class="sp-bull">+2</td></tr><tr><td>突破 MA50</td><td class="sp-bull">+2</td></tr><tr><td>突破 MA20</td><td class="sp-bull">+1</td></tr><tr><td>近52W高</td><td class="sp-bull">+1</td></tr><tr><td>⚡ 能量蓄積</td><td class="sp-bull">+1</td></tr><tr><td>爆量（多頭時）</td><td class="sp-bull">+1</td></tr></table><div class="sep"></div><table><tr><td>跌破 MA20</td><td class="sp-bear">-2</td></tr><tr><td>RSI脫離超買</td><td class="sp-bear">-2</td></tr><tr><td>⚡ Squeeze空</td><td class="sp-bear">-3</td></tr><tr><td>🔽 趨勢轉空</td><td class="sp-bear">-3</td></tr></table><div class="sep"></div><table><tr><td class="sp-bull">≥ +6</td><td>強力多頭訊號 🔥</td></tr><tr><td class="sp-bull">+3 ~ +5</td><td>多頭動能強</td></tr><tr><td class="sp-bull">+1 ~ +2</td><td>輕微多頭</td></tr><tr><td style="color:var(--dim)">0</td><td>中性</td></tr><tr><td class="sp-bear">-1 ~ -2</td><td>輕微空頭</td></tr><tr><td class="sp-bear">≤ -3</td><td>空頭動能強</td></tr></table><p class="sp-note">分數為各訊號加總，多訊號共鳴時更具參考價值</p></div></span></th>
           <th onclick="sortBy('sym')">股票代碼${_sortCol==='sym'?' <span class="sort-icon">'+(_sortDir==='desc'?'▼':'▲')+'</span>':''}</th>
           <th onclick="sortBy('chg')">漲跌%${_sortCol==='chg'?' <span class="sort-icon">'+(_sortDir==='desc'?'▼':'▲')+'</span>':''}</th>
           <th onclick="sortBy('rsi')">RSI${_sortCol==='rsi'?' <span class="sort-icon">'+(_sortDir==='desc'?'▼':'▲')+'</span>':''}</th>
@@ -308,6 +329,16 @@ function renderResults(all) {
     </table>
     </div>`;
 }
+
+function toggleScoreInfo() {
+  document.getElementById("scorePopup").classList.toggle("open");
+}
+document.addEventListener("click", function(e) {
+  const p = document.getElementById("scorePopup");
+  if (p && !p.closest(".score-info-wrap").contains(e.target)) {
+    p.classList.remove("open");
+  }
+});
 
 function sortBy(col) {
   if (_sortCol === col) _sortDir = _sortDir === "desc" ? "asc" : "desc";
