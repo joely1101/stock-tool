@@ -179,6 +179,194 @@ def calculate_rsi(prices, period=14):
     return round(val, 1) if val == val else None  # guard NaN
 
 
+def calculate_squeeze(hist):
+    """
+    Squeeze Momentum (LazyBear).
+    Returns (squeeze_on, momentum_up, fired) where:
+      squeeze_on   = True  → BB inside KC, energy building
+      momentum_up  = True  → momentum pointing up (bullish release)
+      fired        = True  → squeeze JUST released (prior bar was ON, now OFF)
+    """
+    if hist is None or len(hist) < 25:
+        return None, None, False
+    try:
+        c, h, l = hist['Close'], hist['High'], hist['Low']
+        # Bollinger Bands (20, 2)
+        sma20  = c.rolling(20).mean()
+        std20  = c.rolling(20).std()
+        bb_up  = sma20 + 2 * std20
+        bb_dn  = sma20 - 2 * std20
+        # Keltner Channels (20, 1.5 * ATR14)
+        tr     = pd.concat([h - l,
+                            (h - c.shift()).abs(),
+                            (l - c.shift()).abs()], axis=1).max(axis=1)
+        atr14  = tr.rolling(14).mean()
+        ema20  = c.ewm(span=20, adjust=False).mean()
+        kc_up  = ema20 + 1.5 * atr14
+        kc_dn  = ema20 - 1.5 * atr14
+        # Squeeze = BB inside KC
+        sqz    = (bb_up < kc_up) & (bb_dn > kc_dn)
+        # Momentum = delta close vs midpoint of price range
+        highest = h.rolling(20).max()
+        lowest  = l.rolling(20).min()
+        mid     = (highest + lowest) / 2
+        delta   = c - (mid + sma20) / 2
+        # 5-period linear regression slope of delta
+        def linreg_slope(series, n=5):
+            vals = series.dropna().values
+            if len(vals) < n:
+                return 0.0
+            y = vals[-n:]
+            x = np.arange(n)
+            return float(np.polyfit(x, y, 1)[0])
+        mom      = linreg_slope(delta)
+        prev_mom = linreg_slope(delta.iloc[:-1])
+        cur_sqz  = bool(sqz.iloc[-1])
+        prev_sqz = bool(sqz.iloc[-2]) if len(sqz) > 1 else cur_sqz
+        fired    = (prev_sqz and not cur_sqz)   # just released
+        return cur_sqz, mom > 0, fired
+    except Exception:
+        return None, None, False
+
+
+def calculate_supertrend(hist, period=10, multiplier=3.0):
+    """
+    Supertrend indicator.
+    Returns (direction, flip) where:
+      direction = 1 (bullish) or -1 (bearish)
+      flip      = True if direction changed on the last bar
+    """
+    if hist is None or len(hist) < period + 5:
+        return None, False
+    try:
+        h, l, c = hist['High'], hist['Low'], hist['Close']
+        tr  = pd.concat([h - l,
+                         (h - c.shift()).abs(),
+                         (l - c.shift()).abs()], axis=1).max(axis=1)
+        atr = tr.ewm(span=period, adjust=False).mean()
+        hl2 = (h + l) / 2
+        bu  = hl2 + multiplier * atr   # basic upper
+        bl  = hl2 - multiplier * atr   # basic lower
+        # Iterate to compute final bands
+        final_up = bu.copy()
+        final_dn = bl.copy()
+        for i in range(1, len(c)):
+            final_up.iloc[i] = min(bu.iloc[i], final_up.iloc[i-1]) \
+                if c.iloc[i-1] > final_up.iloc[i-1] else bu.iloc[i]
+            final_dn.iloc[i] = max(bl.iloc[i], final_dn.iloc[i-1]) \
+                if c.iloc[i-1] < final_dn.iloc[i-1] else bl.iloc[i]
+        # Supertrend direction
+        direction = pd.Series(index=c.index, dtype=int)
+        for i in range(1, len(c)):
+            if c.iloc[i] > final_up.iloc[i-1]:
+                direction.iloc[i] = 1
+            elif c.iloc[i] < final_dn.iloc[i-1]:
+                direction.iloc[i] = -1
+            else:
+                direction.iloc[i] = direction.iloc[i-1]
+        cur  = int(direction.iloc[-1]) if direction.iloc[-1] != 0 else None
+        prev = int(direction.iloc[-2]) if len(direction) > 1 and direction.iloc[-2] != 0 else cur
+        flip = (cur is not None and prev is not None and cur != prev)
+        return cur, flip
+    except Exception:
+        return None, False
+
+
+def calculate_graham_number(info):
+    """
+    Graham Number = sqrt(22.5 × EPS × Book Value per Share).
+    Conservative fair value for value investors.
+    """
+    import math
+    eps  = info.get("trailingEps") or info.get("forwardEps")
+    bvps = info.get("bookValue")
+    try:
+        eps, bvps = float(eps), float(bvps)
+        if eps > 0 and bvps > 0:
+            return round(math.sqrt(22.5 * eps * bvps), 2)
+    except (TypeError, ValueError):
+        pass
+    return None
+
+
+def detect_movement_signals(hist, current_price, rsi, vol_ratio, week52_high):
+    """
+    Detect actionable movement signals for a stock.
+    Returns list of {type: 'bull'|'bear'|'warn', text: str}
+    """
+    signals = []
+    if hist is None or len(hist) < 25 or current_price is None:
+        return signals
+
+    try:
+        closes = hist['Close']
+        sma20  = float(closes.rolling(20).mean().iloc[-1])
+        sma50  = float(closes.rolling(50).mean().iloc[-1]) if len(closes) >= 50 else None
+        prev   = float(closes.iloc[-2])
+
+        # ── A. Squeeze Momentum ──────────────────────────────────────────────
+        sqz_on, mom_up, sqz_fired = calculate_squeeze(hist)
+        if sqz_fired and mom_up:
+            signals.append({"type":"bull", "text":"⚡ Squeeze多"})
+        elif sqz_fired and not mom_up:
+            signals.append({"type":"bear", "text":"⚡ Squeeze空"})
+        elif sqz_on:
+            signals.append({"type":"warn", "text":"⚡ 能量蓄積"})
+
+        # ── B. Supertrend ────────────────────────────────────────────────────
+        st_dir, st_flip = calculate_supertrend(hist)
+        if st_flip and st_dir == 1:
+            signals.append({"type":"bull", "text":"🔼 趨勢轉多"})
+        elif st_flip and st_dir == -1:
+            signals.append({"type":"bear", "text":"🔽 趨勢轉空"})
+
+        # ── C. MA Breakout ───────────────────────────────────────────────────
+        if prev < sma20 <= current_price:
+            signals.append({"type":"bull", "text":"突破MA20"})
+        elif sma50 and prev < sma50 <= current_price:
+            signals.append({"type":"bull", "text":"突破MA50"})
+        elif current_price < sma20 * 0.97 and prev >= sma20:
+            signals.append({"type":"bear", "text":"跌破MA20"})
+
+        # ── D. 52W High breakout ─────────────────────────────────────────────
+        if week52_high and current_price > 0:
+            if current_price >= week52_high:
+                signals.append({"type":"bull", "text":"🏆 破52W高"})
+            elif current_price >= week52_high * 0.98:
+                signals.append({"type":"warn", "text":"近52W高"})
+
+        # ── E. Volume surge ──────────────────────────────────────────────────
+        if vol_ratio and vol_ratio >= 2.5:
+            signals.append({"type":"warn", "text":f"爆量{vol_ratio:.1f}x"})
+
+        # ── F. RSI extremes ──────────────────────────────────────────────────
+        if rsi is not None:
+            rsi_series = calculate_rsi_series(closes)
+            if rsi_series is not None and len(rsi_series) > 1:
+                prev_rsi = float(rsi_series.iloc[-2])
+                if prev_rsi < 30 <= rsi:
+                    signals.append({"type":"bull", "text":"RSI脫離超賣"})
+                elif prev_rsi > 70 >= rsi:
+                    signals.append({"type":"bear", "text":"RSI脫離超買"})
+
+    except Exception:
+        pass
+
+    return signals[:4]   # cap at 4 signals per stock
+
+
+def calculate_rsi_series(prices, period=14):
+    """Return full RSI series (for signal detection across bars)."""
+    try:
+        delta = prices.diff()
+        gain  = delta.where(delta > 0, 0).rolling(period).mean()
+        loss  = (-delta.where(delta < 0, 0)).rolling(period).mean()
+        rs    = gain / loss
+        return 100 - (100 / (1 + rs))
+    except Exception:
+        return None
+
+
 def calculate_macd(prices):
     """Returns (label, is_bullish). Detects fresh crossover vs sustained trend."""
     ema12 = prices.ewm(span=12, adjust=False).mean()
@@ -557,6 +745,18 @@ def analyze_stock(symbol: str) -> dict:
         # Volume vs 20D avg
         vol_ratio = calculate_volume_ratio(volumes)
 
+        # Graham Number (fair value)
+        graham       = calculate_graham_number(info)
+        graham_upside = (
+            round((graham - current_price) / current_price * 100, 1)
+            if graham and current_price else None
+        )
+
+        # Movement signals (Squeeze, Supertrend, MA breakout, etc.)
+        signals = detect_movement_signals(
+            hist, current_price, rsi, vol_ratio, week52_high
+        )
+
         # Fundamentals
         gross_margin    = info.get("grossMargins")
         roe             = info.get("returnOnEquity")
@@ -676,6 +876,13 @@ def analyze_stock(symbol: str) -> dict:
             "roe_fmt":          f"{roe*100:.1f}%" if roe else "N/A",
             "debt_equity":      debt_equity,
             "debt_equity_fmt":  f"{debt_equity:.2f}" if debt_equity is not None else "N/A",
+            # ── Graham Number ─────────────────────────────────────────────────
+            "graham":           graham,
+            "graham_fmt":       (_fmt_price(graham, currency) if graham else "N/A"),
+            "graham_upside":    graham_upside,
+            "graham_upside_fmt":(f"{graham_upside:+.1f}%" if graham_upside is not None else "N/A"),
+            # ── Movement signals ──────────────────────────────────────────────
+            "signals":          signals,
         }
 
     except Exception as e:

@@ -448,6 +448,21 @@
                border-radius:3px; padding:.05rem .3rem; margin-left:auto;
                white-space:nowrap; flex-shrink:0; }
 
+    /* ── Signal chips ── */
+    .sig-chip { display:inline-block; font-size:.65rem; font-weight:700;
+                padding:.1rem .35rem; border-radius:4px; white-space:nowrap; margin:.1rem .1rem 0 0; }
+    .sig-bull { background:#0d2a1a; color:#3fb950; }
+    .sig-bear { background:#3d1515; color:#f85149; }
+    .sig-warn { background:#2d1f0e; color:#e3b341; }
+    /* ── Graham Number ── */
+    .graham-row { display:flex; align-items:center; gap:.5rem; margin-top:.3rem;
+                  padding:.3rem .5rem; background:var(--bg3); border-radius:6px;
+                  font-size:.78rem; }
+    .graham-label { color:var(--dim); font-size:.68rem; min-width:5rem; }
+    .graham-price { font-weight:700; color:var(--purple); }
+    .graham-up    { color:var(--green); font-weight:600; }
+    .graham-dn    { color:var(--red);   font-weight:600; }
+
     /* ── spinner / error ── */
     .spinner {
       display: none;
@@ -1333,6 +1348,7 @@ function _doRenderRows(results) {
       <td>
         <span class="symbol-badge">${escHtml(r.display_symbol || r.symbol)}</span>${r.is_taiwan ? ' <span title="台灣股市">🇹🇼</span>' : ''}<br/>
         <span style="font-size:0.7rem;color:var(--muted);">${escHtml(r.company_name)}</span>
+        ${(r.signals||[]).map(s=>`<span class="sig-chip sig-${s.type}">${s.text}</span>`).join("")}
       </td>
       <td class="price">
         ${r.current_price_fmt} ${priceArrow(r.symbol, r.current_price)}<br/>
@@ -1502,6 +1518,16 @@ function detailHtml(r) {
       </div>
       <div class="dg-hint">ℹ️ ROE&gt;15%管理效率佳 · D/E&lt;0.5財務穩健</div>
     </div>
+    ${r.graham ? `
+    <div class="dg-group" style="min-width:200px;">
+      <div class="dg-title">📐 Graham 公允價</div>
+      <div class="graham-row">
+        <span class="graham-label">公允價</span>
+        <span class="graham-price">${r.graham_fmt}</span>
+        <span class="${(r.graham_upside||0)>=0?'graham-up':'graham-dn'}">${r.graham_upside_fmt}</span>
+      </div>
+      <div class="dg-hint">ℹ️ Graham公式 = √(22.5×EPS×每股淨值) · 適合傳統價值股</div>
+    </div>` : ''}
   </div>
   <div class="news-section" id="news-${escHtml(r.display_symbol||r.symbol)}">
     <div class="news-loading"><div class="spinner-ring" style="width:14px;height:14px;border-width:2px;display:inline-block;"></div>&nbsp;載入新聞中…</div>
