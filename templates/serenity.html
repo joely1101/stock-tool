@@ -337,7 +337,7 @@ function sorted(list) {
   return [...list].sort((a, b) => {
     let va, vb, cmp = 0;
     const la = _liveData[a.sym], lb = _liveData[b.sym];
-    if (_sortCol === "tier")   { va = _TIER_ORDER[a.tier]||9; vb = _TIER_ORDER[b.tier]||9; cmp = va - vb; }
+    if (_sortCol === "tier")   { va = _TIER_ORDER[a.tier]??9; vb = _TIER_ORDER[b.tier]??9; cmp = va - vb; }
     else if (_sortCol === "sym")  { cmp = a.sym.localeCompare(b.sym); }
     else if (_sortCol === "chg")  { va = la?.chg_pct  ?? -999; vb = lb?.chg_pct  ?? -999; cmp = va - vb; }
     else if (_sortCol === "score"){ va = la?.score ?? -99;    vb = lb?.score ?? -99;    cmp = va - vb; }
