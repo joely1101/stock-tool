@@ -145,6 +145,31 @@
                     animation:spin .75s linear infinite; flex-shrink:0; }
     @keyframes spin { to { transform:rotate(360deg); } }
 
+    /* ── Mobile card layout ── */
+    .sr-m-list { display:none; flex-direction:column; gap:.5rem; }
+    .sr-m-card { background:var(--bg2); border:1px solid var(--border);
+                 border-radius:10px; padding:.6rem .75rem; }
+    .sr-m-top  { display:flex; align-items:center; gap:.4rem; flex-wrap:wrap;
+                 margin-bottom:.3rem; }
+    .sr-m-sym  { font-weight:700; color:var(--blue); font-size:.92rem; }
+    .sr-m-co   { font-size:.72rem; color:var(--muted); flex:1;
+                 white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+    .sr-m-thesis{ font-size:.72rem; color:var(--dim); margin-bottom:.3rem;
+                  line-height:1.4; display:-webkit-box;
+                  -webkit-line-clamp:2; -webkit-box-orient:vertical; overflow:hidden; }
+    .sr-m-mid  { display:flex; align-items:center; gap:.5rem;
+                 flex-wrap:wrap; font-size:.78rem; margin-bottom:.3rem; }
+    .sr-m-sigs { display:flex; flex-wrap:wrap; gap:.25rem; margin-bottom:.25rem; }
+    .sr-m-pt   { font-size:.72rem; color:var(--purple); }
+
+    @media (max-width:768px) {
+      .topbar  { padding:0 .75rem; }
+      .toolbar { padding:.5rem .75rem; }
+      .content { padding:.6rem .75rem 2rem; }
+      .sr-table-wrap { display:none !important; }
+      .sr-m-list { display:flex; }
+    }
+
     /* themes */
     html.theme-white { --bg:#fff; --bg2:#f6f8fa; --bg3:#eaeef2;
       --border:#d0d7de; --text:#24292f; --muted:#57606a; --dim:#8c959f; }
@@ -353,7 +378,46 @@ function renderTable() {
     ? ' <span class="sort-icon">' + (_sortDir==="desc"?"▼":"▲") + "</span>"
     : "";
 
+  // Mobile cards
+  const mCards = list.map(s => {
+    const live = _liveData[s.sym];
+    const tierCls = "tier-" + (["S","A","B","C","D"].includes(s.tier) ? s.tier : "W");
+    const secCls  = "sec-" + s.sector;
+    const secLbl  = {photon:"光子學",neocloud:"Neocloud",chips:"AI晶片",other:"其他"}[s.sector]||"";
+    let priceStr = "", chgStr = "", chgCls = "na";
+    if (live) {
+      priceStr = fmtPrice(live.price, live.currency);
+      chgCls   = (live.chg_pct||0) >= 0 ? "pos" : "neg";
+      chgStr   = (live.chg_pct >= 0 ? "+" : "") + live.chg_pct + "%";
+    }
+    const sc = live?.score ?? null;
+    const scBadge = sc != null
+      ? '<span class="score-badge '+(sc>=6?"score-s3":sc>=3?"score-s2":sc>=1?"score-s1":sc===0?"score-s0":sc>=-2?"score-sm1":"score-sm2")+'">'+(sc>0?"+":"")+sc+"</span>"
+      : "";
+    const rsiStr = live?.rsi != null
+      ? '<span class="rsi-chip '+(live.rsi>=70?"rsi-hot":live.rsi<=30?"rsi-cold":"rsi-norm")+'">RSI '+live.rsi+'</span>'
+      : "";
+    const sigHtml = (live?.signals||[]).map(sg => '<span class="sig-chip sig-'+sg.type+'">'+sg.text+'</span>').join("");
+    const ptHtml  = s.pt
+      ? '<span class="sr-m-pt">📍 PT: $'+s.pt+(live?.price?' ('+(((s.pt-live.price)/live.price*100).toFixed(0))+'%)':'')+(s.ptNote?' · '+s.ptNote:'')+'</span>'
+      : "";
+    return '<div class="sr-m-card">'
+      + '<div class="sr-m-top"><span class="tier '+tierCls+'">'+s.tier+'</span>'
+      + '<span class="sr-m-sym">'+s.sym+'</span>'
+      + '<span class="sec-pill '+secCls+'">'+secLbl+'</span>'
+      + '<span class="sr-m-co">'+s.name+'</span>'
+      + (chgStr ? '<span class="'+chgCls+'" style="font-weight:600;font-size:.82rem;">'+chgStr+'</span>' : '')
+      + '</div>'
+      + '<div class="sr-m-thesis" title="'+s.thesis+'">'+s.thesis+'</div>'
+      + (priceStr || scBadge || rsiStr ? '<div class="sr-m-mid">'+(priceStr?'<span style="font-weight:600">'+priceStr+'</span>':'')+scBadge+rsiStr+'</div>' : '')
+      + (sigHtml ? '<div class="sr-m-sigs">'+sigHtml+'</div>' : '')
+      + ptHtml
+      + '</div>';
+  }).join("");
+
   document.getElementById("content").innerHTML = `
+    <div class="sr-m-list">${mCards}</div>
+    <div class="sr-table-wrap" style="overflow-x:auto;">
     <table class="sr-table">
       <thead>
         <tr>
@@ -371,6 +435,7 @@ function renderTable() {
         ${list.map(s => rowHtml(s)).join("")}
       </tbody>
     </table>
+    </div>
     <p style="font-size:.72rem;color:var(--dim);margin-top:.75rem;">
       共 ${list.length} 檔 · 點擊欄位排序 · Serenity PT = 其公開發文中的目標價（不代表官方建議）
     </p>`;

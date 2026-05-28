@@ -149,12 +149,25 @@
     }
 
     /* responsive */
+    /* ── Mobile card layout ── */
+    .m-card-list { display:none; flex-direction:column; gap:.5rem; }
+    .m-card { background:var(--bg2); border:1px solid var(--border);
+              border-radius:10px; padding:.6rem .75rem; }
+    .m-card-top { display:flex; align-items:center; gap:.45rem;
+                  margin-bottom:.3rem; flex-wrap:wrap; }
+    .m-card-sym  { font-weight:700; color:var(--blue); font-size:.92rem; }
+    .m-card-co   { font-size:.72rem; color:var(--muted); flex:1;
+                   overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+    .m-card-mid  { display:flex; align-items:center; gap:.5rem;
+                   flex-wrap:wrap; margin-bottom:.3rem; font-size:.78rem; }
+    .m-card-sigs { display:flex; flex-wrap:wrap; gap:.25rem; }
+
     @media (max-width:640px) {
       .topbar { padding:0 .75rem; }
       .toolbar { padding:.5rem .75rem; }
-      .content { padding:.75rem; }
-      .scan-table td:nth-child(3),
-      .scan-table th:nth-child(3) { display:none; }  /* hide vol ratio on small screens */
+      .content { padding:.6rem .75rem; }
+      .scan-table-wrap { display:none !important; }
+      .m-card-list { display:flex; }
     }
   </style>
 </head>
@@ -285,12 +298,35 @@ function renderResults(all) {
   const isTW = _market === "TW";
   const pFmt = (p, c) => c === "TWD" ? "NT$" + p.toLocaleString() : "$" + p.toFixed(2);
 
+  // mobile cards
+  const mCards = sorted.map(r => {
+    const chgCls = r.chg_pct >= 0 ? "pos" : "neg";
+    const rsiCls = (r.rsi||50) >= 70 ? "rsi-hot" : (r.rsi||50) <= 30 ? "rsi-cold" : "rsi-norm";
+    const sc = r.score || 0;
+    const scCls = sc>=6?"score-s3":sc>=3?"score-s2":sc>=1?"score-s1":sc===0?"score-s0":sc>=-2?"score-sm1":"score-sm2";
+    const sigHtml = r.signals.map(s => '<span class="sig-chip sig-'+s.type+'">'+s.text+'</span>').join("");
+    return `<div class="m-card">
+      <div class="m-card-top">
+        <span class="score-badge ${scCls}">${sc>0?"+":""}${sc}</span>
+        <span class="m-card-sym">${r.symbol}</span>
+        <span class="m-card-co">${r.name}</span>
+        <span class="${chgCls}" style="font-weight:600;font-size:.82rem;">${r.chg_pct>=0?"+":""}${r.chg_pct}%</span>
+      </div>
+      <div class="m-card-mid">
+        ${r.rsi!=null?'<span class="rsi-chip '+rsiCls+'">RSI '+r.rsi+'</span>':''}
+        ${r.vol_ratio!=null?'<span style="color:var(--dim)">量比 '+r.vol_ratio+'x</span>':''}
+      </div>
+      <div class="m-card-sigs">${sigHtml}</div>
+    </div>`;
+  }).join("");
+
   document.getElementById("content").innerHTML = `
     <p style="font-size:.78rem;color:var(--dim);margin-bottom:.6rem;">
       顯示 ${filtered.length} / ${all.length} 個訊號股票
       <span style="margin-left:1rem;font-size:.72rem;">點擊欄位標題排序</span>
     </p>
-    <div style="overflow-x:auto;">
+    <div class="m-card-list">${mCards}</div>
+    <div class="scan-table-wrap" style="overflow-x:auto;">
     <table class="scan-table">
       <thead>
         <tr>
@@ -327,7 +363,7 @@ function renderResults(all) {
         }).join("")}
       </tbody>
     </table>
-    </div>`;
+    </div>`; // close scan-table-wrap
 }
 
 function toggleScoreInfo() {
