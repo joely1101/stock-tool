@@ -113,13 +113,44 @@
     html.theme-lightyellow { --bg:#fffbe8; --bg2:#fef9df; --bg3:#fdf7d7;
       --border:#f3eac1; --text:#1e1400; --muted:#503800; --dim:#8d7318; }
 
+    /* ── Mobile bottom sheet ── */
+    .m-sheet-overlay { display:none; position:fixed; inset:0; background:rgba(0,0,0,.5);
+                       z-index:100; }
+    .m-sheet-overlay.open { display:block; }
+    .m-sheet { position:fixed; bottom:0; left:0; right:0; z-index:101;
+               background:var(--bg2); border-radius:14px 14px 0 0;
+               border-top:1px solid var(--border);
+               max-height:65vh; overflow-y:auto;
+               transform:translateY(100%); transition:transform .25s ease; }
+    .m-sheet.open { transform:translateY(0); }
+    .m-sheet-handle { width:36px; height:4px; background:var(--border);
+                      border-radius:2px; margin:.65rem auto .3rem; }
+    .m-sheet-date { font-size:.9rem; font-weight:700; color:var(--blue);
+                    padding:.3rem 1rem .5rem; border-bottom:1px solid var(--border); }
+    .m-sheet-empty { color:var(--dim); font-size:.84rem;
+                     padding:1rem 1rem .5rem; }
+    .m-sheet-event { display:flex; gap:.5rem; align-items:flex-start;
+                     padding:.45rem 1rem; border-bottom:1px solid var(--bg3); }
+    .m-sheet-event:last-child { border-bottom:none; padding-bottom:.8rem; }
+    .m-sheet-dot  { width:9px; height:9px; border-radius:50%;
+                    flex-shrink:0; margin-top:.35rem; }
+    .m-sheet-sym  { font-weight:700; font-size:.84rem; color:var(--blue); }
+    .m-sheet-name { font-size:.75rem; color:var(--muted); }
+    .m-sheet-type { font-size:.7rem; font-weight:700; }
+    .m-sheet-detail { font-size:.72rem; color:var(--dim); }
+
     @media (max-width:768px) {
       .cal-side { display:none; }
-      .cal-main { padding:.5rem .5rem 2rem; }
-      .day-cell  { min-height:60px; padding:.25rem .2rem; }
-      .day-num   { font-size:.72rem; }
-      .ev-chip   { font-size:.56rem; }
+      .cal-main { padding:.4rem .4rem 1.5rem; }
+      .cal-grid { border-radius:6px; }
+      .day-cell  { min-height:62px; padding:.25rem .2rem; cursor:pointer; }
+      .day-num   { font-size:.75rem; }
+      .ev-chip   { font-size:.58rem; padding:.06rem .22rem; }
       .legend    { display:none; }
+      .toolbar   { padding:.45rem .75rem; gap:.4rem; }
+      .month-nav { gap:.3rem; }
+      .nav-arrow { padding:.25rem .55rem; }
+      .month-label { font-size:.88rem; min-width:5.5rem; }
     }
   </style>
 </head>
@@ -301,33 +332,64 @@ function renderCalendar() {
   document.getElementById("calMain").innerHTML = html;
 }
 
-function selectDay(dateStr) {
-  _selDate = dateStr;
-  renderCalendar();   // re-render to show selected highlight
-
-  const side  = document.getElementById("calSide");
+// ── Mobile bottom sheet ──────────────────────────────────────────────────────
+function openMobileSheet(dateStr) {
   const dayEvents = _events[dateStr] || [];
   const d = new Date(dateStr + "T12:00:00");
   const label = `${d.getFullYear()}/${d.getMonth()+1}/${d.getDate()} (${DAYS_ZH[d.getDay()]})`;
 
+  const content = document.getElementById("mSheetContent");
   if (!dayEvents.length) {
-    side.innerHTML = `<div class="side-date">${label}</div>
-      <div class="side-empty">本日無事件</div>`;
-    return;
+    content.innerHTML = `<div class="m-sheet-date">${label}</div>
+      <div class="m-sheet-empty">本日無事件</div>`;
+  } else {
+    const items = dayEvents.map(e => `
+      <div class="m-sheet-event">
+        <div class="m-sheet-dot" style="background:${TYPE_COLOR[e.type]||"#58a6ff"}"></div>
+        <div>
+          <div><span class="m-sheet-sym">${e.symbol||""}</span>
+               <span class="m-sheet-type" style="margin-left:.3rem;color:${TYPE_COLOR[e.type]}">${TYPE_LABEL[e.type]||e.type}</span></div>
+          <div class="m-sheet-name">${e.name||""}</div>
+          ${e.detail?`<div class="m-sheet-detail">${e.detail}</div>`:""}
+        </div>
+      </div>`).join("");
+    content.innerHTML = `<div class="m-sheet-date">${label} · ${dayEvents.length} 事件</div>${items}`;
   }
+  document.getElementById("mSheetOverlay").classList.add("open");
+  document.getElementById("mSheet").classList.add("open");
+}
+function closeMobileSheet() {
+  document.getElementById("mSheetOverlay").classList.remove("open");
+  document.getElementById("mSheet").classList.remove("open");
+}
 
-  const items = dayEvents.map(e => `
-    <div class="side-event">
-      <div class="side-dot" style="background:${TYPE_COLOR[e.type]||"#58a6ff"}"></div>
-      <div class="side-info">
-        <div><span class="side-sym">${e.symbol||""}</span>
-          <span class="side-type" style="margin-left:.3rem;color:${TYPE_COLOR[e.type]}">${TYPE_LABEL[e.type]||e.type}</span></div>
-        <div class="side-name">${e.name||""}</div>
-        ${e.detail ? `<div class="side-detail">${e.detail}</div>` : ""}
-      </div>
-    </div>`).join("");
-
-  side.innerHTML = `<div class="side-date">${label} · ${dayEvents.length} 事件</div>${items}`;
+function selectDay(dateStr) {
+  _selDate = dateStr;
+  renderCalendar();
+  if (window.innerWidth <= 768) {
+    openMobileSheet(dateStr);
+  } else {
+    const side  = document.getElementById("calSide");
+    const dayEvents = _events[dateStr] || [];
+    const d = new Date(dateStr + "T12:00:00");
+    const label = `${d.getFullYear()}/${d.getMonth()+1}/${d.getDate()} (${DAYS_ZH[d.getDay()]})`;
+    if (!dayEvents.length) {
+      side.innerHTML = `<div class="side-date">${label}</div>
+        <div class="side-empty">本日無事件</div>`;
+      return;
+    }
+    const items = dayEvents.map(e => `
+      <div class="side-event">
+        <div class="side-dot" style="background:${TYPE_COLOR[e.type]||"#58a6ff"}"></div>
+        <div class="side-info">
+          <div><span class="side-sym">${e.symbol||""}</span>
+            <span class="side-type" style="margin-left:.3rem;color:${TYPE_COLOR[e.type]}">${TYPE_LABEL[e.type]||e.type}</span></div>
+          <div class="side-name">${e.name||""}</div>
+          ${e.detail ? `<div class="side-detail">${e.detail}</div>` : ""}
+        </div>
+      </div>`).join("");
+    side.innerHTML = `<div class="side-date">${label} · ${dayEvents.length} 事件</div>${items}`;
+  }
 }
 
 // Init
@@ -335,5 +397,12 @@ document.getElementById("monthLabel").textContent =
   `${_year} / ${MONTHS_ZH[_month]}`;
 loadMonth();
 </script>
+
+<!-- Mobile bottom sheet -->
+<div class="m-sheet-overlay" id="mSheetOverlay" onclick="closeMobileSheet()"></div>
+<div class="m-sheet" id="mSheet">
+  <div class="m-sheet-handle"></div>
+  <div id="mSheetContent"></div>
+</div>
 </body>
 </html>
