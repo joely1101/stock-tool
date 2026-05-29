@@ -74,6 +74,9 @@
     .ev-dividend { background:#1a0a2e; color:var(--purple); }
     .ev-holiday  { background:#3d1515; color:var(--red); }
     .ev-fed      { background:#2d2200; color:#e3b341; border:1px solid #9e6a0366; font-weight:800; }
+    .ev-cbc      { background:#1e1040; color:#c084fc; border:1px solid #7c3aed55; font-weight:800; }
+    .ev-taifex   { background:#0d2535; color:#38bdf8; font-weight:700; }
+    .ev-deadline { background:#1c1a0a; color:#fbbf24; font-size:.6rem; }
 
     /* side panel */
     .cal-side { width:280px; flex-shrink:0; border-left:1px solid var(--border);
@@ -147,6 +150,9 @@
     <span class="leg-item"><span class="leg-dot" style="background:#d2a8ff"></span>股息發放</span>
     <span class="leg-item"><span class="leg-dot" style="background:#f85149"></span>休市/假日</span>
     <span class="leg-item"><span class="leg-dot" style="background:#e3b341"></span>FED/FOMC</span>
+    <span class="leg-item"><span class="leg-dot" style="background:#c084fc"></span>台灣央行</span>
+    <span class="leg-item"><span class="leg-dot" style="background:#38bdf8"></span>期指結算</span>
+    <span class="leg-item"><span class="leg-dot" style="background:#fbbf24"></span>財報截止</span>
   </div>
 </div>
 
@@ -175,15 +181,15 @@ let _selDate = null;
 
 const TYPE_COLOR = {
   earnings:"#58a6ff", exdiv:"#3fb950", exright:"#f0883e",
-  dividend:"#d2a8ff", holiday:"#f85149", fed:"#e3b341"
+  dividend:"#d2a8ff", holiday:"#f85149", fed:"#e3b341", cbc:"#c084fc", taifex:"#38bdf8", deadline:"#fbbf24"
 };
 const TYPE_LABEL = {
   earnings:"財報日", exdiv:"除息日", exright:"除權日",
-  dividend:"股息發放日", holiday:"休市", fed:"聯準會FOMC"
+  dividend:"股息發放日", holiday:"休市", fed:"聯準會FOMC", cbc:"台灣央行CBC", taifex:"期指結算", deadline:"財報截止"
 };
 const TYPE_CLS = {
   earnings:"ev-earnings", exdiv:"ev-exdiv", exright:"ev-exright",
-  dividend:"ev-dividend", holiday:"ev-holiday", fed:"ev-fed"
+  dividend:"ev-dividend", holiday:"ev-holiday", fed:"ev-fed", cbc:"ev-cbc", taifex:"ev-taifex", deadline:"ev-deadline"
 };
 
 const MONTHS_ZH = ["","一月","二月","三月","四月","五月","六月",
