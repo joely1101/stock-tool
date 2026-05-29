@@ -702,6 +702,168 @@ _TW_SCAN_LIST = [
     {"s":"00631L","n":"元大台灣50正2 ETF"},{"s":"00663L","n":"國泰台灣加權正2 ETF"},
 ]
 
+@app.route("/calendar")
+def calendar_page():
+    return render_template("calendar.html")
+
+@app.route("/calendar/events")
+def calendar_events():
+    import yfinance as yf
+    import json as _json, datetime as _dt, calendar as _cal
+    import urllib.request as _ur
+    from concurrent.futures import ThreadPoolExecutor
+
+    market = request.args.get("market", "US").upper()
+    ym     = request.args.get("month", _dt.date.today().strftime("%Y-%m"))
+    try:
+        year, month = map(int, ym.split("-"))
+    except Exception:
+        return jsonify({"error": "invalid month"}), 400
+
+    cache_key = f"cal:{market}:{ym}"
+    cached = _cache.get(cache_key)
+    if cached:
+        return jsonify(cached)
+
+    first = _dt.date(year, month, 1)
+    last  = _dt.date(year, month, _cal.monthrange(year, month)[1])
+    events = []
+
+    if market == "US":
+        # ── Load stock list (top 100 + profile stocks) ──────────────────────
+        static_path = os.path.join(os.path.dirname(__file__), "static", "us_stocks_top.json")
+        with open(static_path) as f:
+            top_list = _json.load(f)
+        name_map = {s["s"]: s["n"] for s in top_list}
+        syms = [s["s"] for s in top_list[:100]]
+
+        # Add profile stocks
+        try:
+            profiles_path = os.path.join(os.path.dirname(__file__), "profiles.json")
+            with open(profiles_path) as f:
+                profs = _json.load(f)
+            for prof in profs.values():
+                for s in prof.get("stocks", []):
+                    sym = s.upper()
+                    if not _TW_SYM.match(sym) and sym not in syms:
+                        syms.append(sym)
+        except Exception:
+            pass
+
+        def fetch_cal(sym):
+            try:
+                cal = yf.Ticker(sym).calendar
+                if not cal:
+                    return []
+                result = []
+                # Earnings
+                for ed in (cal.get("Earnings Date") or []):
+                    if hasattr(ed, 'date'): ed = ed.date()
+                    if isinstance(ed, str): ed = _dt.datetime.strptime(ed[:10],"%Y-%m-%d").date()
+                    if first <= ed <= last:
+                        eps_est = cal.get("Earnings Average")
+                        result.append({"date": ed.strftime("%Y-%m-%d"), "type": "earnings",
+                                       "symbol": sym, "name": name_map.get(sym, sym),
+                                       "detail": f"EPS Est: ${eps_est:.2f}" if eps_est else ""})
+                # Ex-dividend
+                exd = cal.get("Ex-Dividend Date")
+                if exd:
+                    if hasattr(exd, 'date'): exd = exd.date()
+                    if first <= exd <= last:
+                        result.append({"date": exd.strftime("%Y-%m-%d"), "type": "exdiv",
+                                       "symbol": sym, "name": name_map.get(sym, sym), "detail": ""})
+                # Dividend pay date
+                dd = cal.get("Dividend Date")
+                if dd:
+                    if hasattr(dd, 'date'): dd = dd.date()
+                    if first <= dd <= last:
+                        result.append({"date": dd.strftime("%Y-%m-%d"), "type": "dividend",
+                                       "symbol": sym, "name": name_map.get(sym, sym), "detail": ""})
+                return result
+            except Exception:
+                return []
+
+        with ThreadPoolExecutor(max_workers=25) as ex:
+            for res in ex.map(fetch_cal, syms):
+                events.extend(res)
+
+        # US market holidays 2026
+        us_holidays = {
+            "2026-01-01":"New Year's Day", "2026-01-19":"MLK Day",
+            "2026-02-16":"Presidents Day", "2026-04-03":"Good Friday",
+            "2026-05-25":"Memorial Day",   "2026-06-19":"Juneteenth",
+            "2026-07-03":"Independence Day","2026-09-07":"Labor Day",
+            "2026-11-26":"Thanksgiving",    "2026-11-27":"Black Friday (½ day)",
+            "2026-12-25":"Christmas Day",
+        }
+        for hdate, hname in us_holidays.items():
+            if hdate.startswith(ym):
+                events.append({"date": hdate, "type": "holiday",
+                                "symbol": "", "name": hname, "detail": "市場休市"})
+
+    else:  # TW
+        # ── TWSE ex-dividend/rights calendar ──────────────────────────────
+        date_start = first.strftime("%Y%m%d")
+        date_end   = last.strftime("%Y%m%d")
+        url = (f"https://www.twse.com.tw/rwd/zh/exRight/TWT49U"
+               f"?response=json&strDate={date_start}&endDate={date_end}")
+        try:
+            req = _ur.Request(url, headers={"User-Agent":"Mozilla/5.0"})
+            data = _json.loads(_ur.urlopen(req, timeout=8).read())
+            for row in data.get("data", []):
+                try:
+                    roc_str = str(row[0]).strip()          # e.g. "115年05月28日"
+                    parts   = roc_str.replace("年","/").replace("月","/").replace("日","").split("/")
+                    gy = int(parts[0]) + 1911
+                    gm = int(parts[1]); gd = int(parts[2])
+                    etype = "exdiv" if "息" in str(row[6]) else "exright"
+                    events.append({
+                        "date":   f"{gy}-{gm:02d}-{gd:02d}",
+                        "type":   etype,
+                        "symbol": str(row[1]).strip(),
+                        "name":   str(row[2]).strip(),
+                        "detail": f"除{'息' if etype=='exdiv' else '權'}  參考價:{row[4]}",
+                    })
+                except Exception:
+                    pass
+        except Exception:
+            pass
+
+        # TW profile stocks' earnings from yfinance
+        try:
+            profiles_path = os.path.join(os.path.dirname(__file__), "profiles.json")
+            with open(profiles_path) as f:
+                profs = _json.load(f)
+            tw_syms = []
+            for prof in profs.values():
+                for s in prof.get("stocks", []):
+                    if _TW_SYM.match(s.upper()):
+                        tw_syms.append(s.upper() + ".TW")
+            def fetch_tw_cal(yf_sym):
+                try:
+                    cal = yf.Ticker(yf_sym).calendar
+                    if not cal: return []
+                    result = []
+                    sym = yf_sym.replace(".TW","")
+                    for ed in (cal.get("Earnings Date") or []):
+                        if hasattr(ed,'date'): ed = ed.date()
+                        if isinstance(ed, str): ed = _dt.datetime.strptime(ed[:10],"%Y-%m-%d").date()
+                        if first <= ed <= last:
+                            result.append({"date":ed.strftime("%Y-%m-%d"),"type":"earnings",
+                                           "symbol":sym,"name":sym,"detail":""})
+                    return result
+                except Exception:
+                    return []
+            with ThreadPoolExecutor(max_workers=10) as ex:
+                for res in ex.map(fetch_tw_cal, tw_syms[:30]):
+                    events.extend(res)
+        except Exception:
+            pass
+
+    payload = {"market": market, "month": ym, "events": events}
+    _cache.set(cache_key, payload, ttl=43200)   # 12h cache
+    return jsonify(payload)
+
 @app.route("/stock/institutional")
 def stock_institutional():
     import yfinance as yf
