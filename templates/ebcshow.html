@@ -262,7 +262,7 @@ function renderCard(v) {
         <img src="${v.thumbnail}" alt="${v.title}" loading="lazy"
              onerror="this.src='https://img.youtube.com/vi/${v.id}/0.jpg'"/>
       </a>
-      ${v.date ? `<span class="thumb-date">${v.date}</span>` : ""}
+      ${v.pub_tw ? `<span class="thumb-date">${v.pub_tw} 🇹🇼</span>` : v.date ? `<span class="thumb-date">${v.date}</span>` : ""}
       ${v.duration ? `<span class="thumb-dur">${v.duration}</span>` : ""}
     </div>
     <div class="card-body">

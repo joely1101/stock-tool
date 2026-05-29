@@ -64,7 +64,7 @@ def _fetch_url(url, timeout=8):
     return urllib.request.urlopen(req, timeout=timeout).read().decode("utf-8", errors="replace")
 
 
-def summarize_with_gemini(video_url: str) -> dict | None:
+def summarize_with_gemini(video_url: str):
     """
     Use Gemini to analyse the EBC Money Show video and return structured summary.
     Returns dict with keys: stocks, views, market, key_points, raw
@@ -122,12 +122,26 @@ def fetch_rss_videos():
         for entry in feed.entries[:MAX_VIDEOS]:
             vid_id = getattr(entry, "yt_videoid", None) or entry.id.split(":")[-1]
             pub    = getattr(entry, "published", "") or ""
+            # Convert UTC to Taiwan time (UTC+8)
+            pub_ts = 0
             date   = pub[:10] if pub else ""
+            pub_tw = ""
+            try:
+                import calendar
+                pt = entry.published_parsed   # UTC struct_time
+                pub_ts = calendar.timegm(pt)
+                tw_dt  = datetime.datetime.utcfromtimestamp(pub_ts + 8*3600)
+                date   = tw_dt.strftime("%Y-%m-%d")
+                pub_tw = tw_dt.strftime("%m/%d %H:%M")
+            except Exception:
+                pass
             videos.append({
-                "id":      vid_id,
-                "title":   entry.title,
-                "url":     f"https://www.youtube.com/watch?v={vid_id}",
-                "date":    date,
+                "id":        vid_id,
+                "title":     entry.title,
+                "url":       f"https://www.youtube.com/watch?v={vid_id}",
+                "date":      date,
+                "pub_tw":    pub_tw,    # Taiwan time display string
+                "pub_ts":    pub_ts,    # Unix timestamp for sorting
                 "thumbnail": f"https://img.youtube.com/vi/{vid_id}/maxresdefault.jpg",
             })
         return videos
@@ -275,7 +289,7 @@ def run_daily_fetch():
 
     # Merge with previous and keep history
     all_videos = list({v["id"]: v for v in list(existing.values())}.values())
-    all_videos.sort(key=lambda x: x.get("date",""), reverse=True)
+    all_videos.sort(key=lambda x: x.get("pub_ts", 0) or x.get("date",""), reverse=True)
     all_videos = all_videos[:MAX_VIDEOS * 3]
 
     payload = {
