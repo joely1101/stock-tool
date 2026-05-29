@@ -787,8 +787,13 @@ def calendar_events():
             for res in ex.map(fetch_cal, syms):
                 events.extend(res)
 
-        # US market holidays 2026
+        # US market holidays 2025-2026
         us_holidays = {
+            "2025-01-01":"New Year's Day", "2025-01-20":"MLK Day",
+            "2025-02-17":"Presidents Day", "2025-04-18":"Good Friday",
+            "2025-05-26":"Memorial Day",   "2025-06-19":"Juneteenth",
+            "2025-07-04":"Independence Day","2025-09-01":"Labor Day",
+            "2025-11-27":"Thanksgiving",    "2025-12-25":"Christmas Day",
             "2026-01-01":"New Year's Day", "2026-01-19":"MLK Day",
             "2026-02-16":"Presidents Day", "2026-04-03":"Good Friday",
             "2026-05-25":"Memorial Day",   "2026-06-19":"Juneteenth",
@@ -800,6 +805,53 @@ def calendar_events():
             if hdate.startswith(ym):
                 events.append({"date": hdate, "type": "holiday",
                                 "symbol": "", "name": hname, "detail": "市場休市"})
+
+        # FOMC meeting dates (announcement day = 2nd day of meeting)
+        # * = includes Summary of Economic Projections (dot plot)
+        fomc = {
+            # 2025
+            "2025-01-28":{"start":"2025-01-28","end":"2025-01-29","dot":False},
+            "2025-01-29":{"start":"2025-01-28","end":"2025-01-29","dot":False,"announce":True},
+            "2025-03-18":{"start":"2025-03-18","end":"2025-03-19","dot":True},
+            "2025-03-19":{"start":"2025-03-18","end":"2025-03-19","dot":True,"announce":True},
+            "2025-05-06":{"start":"2025-05-06","end":"2025-05-07","dot":False},
+            "2025-05-07":{"start":"2025-05-06","end":"2025-05-07","dot":False,"announce":True},
+            "2025-06-17":{"start":"2025-06-17","end":"2025-06-18","dot":True},
+            "2025-06-18":{"start":"2025-06-17","end":"2025-06-18","dot":True,"announce":True},
+            "2025-07-29":{"start":"2025-07-29","end":"2025-07-30","dot":False},
+            "2025-07-30":{"start":"2025-07-29","end":"2025-07-30","dot":False,"announce":True},
+            "2025-09-16":{"start":"2025-09-16","end":"2025-09-17","dot":True},
+            "2025-09-17":{"start":"2025-09-16","end":"2025-09-17","dot":True,"announce":True},
+            "2025-10-28":{"start":"2025-10-28","end":"2025-10-29","dot":False},
+            "2025-10-29":{"start":"2025-10-28","end":"2025-10-29","dot":False,"announce":True},
+            "2025-12-09":{"start":"2025-12-09","end":"2025-12-10","dot":True},
+            "2025-12-10":{"start":"2025-12-09","end":"2025-12-10","dot":True,"announce":True},
+            # 2026
+            "2026-01-27":{"start":"2026-01-27","end":"2026-01-28","dot":False},
+            "2026-01-28":{"start":"2026-01-27","end":"2026-01-28","dot":False,"announce":True},
+            "2026-03-17":{"start":"2026-03-17","end":"2026-03-18","dot":True},
+            "2026-03-18":{"start":"2026-03-17","end":"2026-03-18","dot":True,"announce":True},
+            "2026-04-28":{"start":"2026-04-28","end":"2026-04-29","dot":False},
+            "2026-04-29":{"start":"2026-04-28","end":"2026-04-29","dot":False,"announce":True},
+            "2026-06-16":{"start":"2026-06-16","end":"2026-06-17","dot":True},
+            "2026-06-17":{"start":"2026-06-16","end":"2026-06-17","dot":True,"announce":True},
+            "2026-07-28":{"start":"2026-07-28","end":"2026-07-29","dot":False},
+            "2026-07-29":{"start":"2026-07-28","end":"2026-07-29","dot":False,"announce":True},
+            "2026-09-15":{"start":"2026-09-15","end":"2026-09-16","dot":True},
+            "2026-09-16":{"start":"2026-09-15","end":"2026-09-16","dot":True,"announce":True},
+            "2026-10-27":{"start":"2026-10-27","end":"2026-10-28","dot":False},
+            "2026-10-28":{"start":"2026-10-27","end":"2026-10-28","dot":False,"announce":True},
+            "2026-12-08":{"start":"2026-12-08","end":"2026-12-09","dot":True},
+            "2026-12-09":{"start":"2026-12-08","end":"2026-12-09","dot":True,"announce":True},
+        }
+        for fdate, info in fomc.items():
+            if fdate.startswith(ym):
+                is_announce = info.get("announce", False)
+                dot_str     = " (含點陣圖)" if info["dot"] else ""
+                label       = f"FOMC 利率決策{dot_str} ⚡" if is_announce else f"FOMC 會議 Day1"
+                detail      = f"2:00 PM ET 公布利率決策{dot_str}" if is_announce else f"會議第一天 ({info['start']} ~ {info['end']})"
+                events.append({"date": fdate, "type": "fed",
+                                "symbol": "FED", "name": label, "detail": detail})
 
     else:  # TW
         # ── TWSE ex-dividend/rights calendar ──────────────────────────────

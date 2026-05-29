@@ -73,6 +73,7 @@
     .ev-exright  { background:#2d1f0e; color:var(--orange); }
     .ev-dividend { background:#1a0a2e; color:var(--purple); }
     .ev-holiday  { background:#3d1515; color:var(--red); }
+    .ev-fed      { background:#2d2200; color:#e3b341; border:1px solid #9e6a0366; font-weight:800; }
 
     /* side panel */
     .cal-side { width:280px; flex-shrink:0; border-left:1px solid var(--border);
@@ -145,6 +146,7 @@
     <span class="leg-item"><span class="leg-dot" style="background:#f0883e"></span>除權日</span>
     <span class="leg-item"><span class="leg-dot" style="background:#d2a8ff"></span>股息發放</span>
     <span class="leg-item"><span class="leg-dot" style="background:#f85149"></span>休市/假日</span>
+    <span class="leg-item"><span class="leg-dot" style="background:#e3b341"></span>FED/FOMC</span>
   </div>
 </div>
 
@@ -173,15 +175,15 @@ let _selDate = null;
 
 const TYPE_COLOR = {
   earnings:"#58a6ff", exdiv:"#3fb950", exright:"#f0883e",
-  dividend:"#d2a8ff", holiday:"#f85149"
+  dividend:"#d2a8ff", holiday:"#f85149", fed:"#e3b341"
 };
 const TYPE_LABEL = {
   earnings:"財報日", exdiv:"除息日", exright:"除權日",
-  dividend:"股息發放日", holiday:"休市"
+  dividend:"股息發放日", holiday:"休市", fed:"聯準會FOMC"
 };
 const TYPE_CLS = {
   earnings:"ev-earnings", exdiv:"ev-exdiv", exright:"ev-exright",
-  dividend:"ev-dividend", holiday:"ev-holiday"
+  dividend:"ev-dividend", holiday:"ev-holiday", fed:"ev-fed"
 };
 
 const MONTHS_ZH = ["","一月","二月","三月","四月","五月","六月",
@@ -285,8 +287,9 @@ function renderCalendar() {
   // Summary row
   const totalEvents = Object.values(_events).flat().length;
   const earningsCount = Object.values(_events).flat().filter(e=>e.type==="earnings").length;
+  const fedCount = Object.values(_events).flat().filter(e=>e.type==="fed"&&e.name.includes("決策")).length;
   html += `<p style="font-size:.72rem;color:var(--dim);margin-top:.6rem;">
-    本月 ${totalEvents} 個事件 · 財報日 ${earningsCount} 檔 · 點擊日期查看詳情
+    本月 ${totalEvents} 個事件 · 財報日 ${earningsCount} 檔 · FOMC ${fedCount} 次 · 點擊日期查看詳情
   </p>`;
 
   document.getElementById("calMain").innerHTML = html;
