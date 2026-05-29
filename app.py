@@ -728,6 +728,32 @@ def ebcshow_refresh():
     except Exception as e:
         return jsonify({"error": str(e)}), 500
 
+@app.route("/ebcshow/summarize", methods=["POST"])
+def ebcshow_summarize():
+    """Re-run Gemini summary on a specific video."""
+    vid_id = request.json.get("id","") if request.is_json else ""
+    if not vid_id:
+        return jsonify({"error": "id required"}), 400
+    try:
+        from ebcshow import summarize_with_gemini, DATA_FILE
+        url = f"https://www.youtube.com/watch?v={vid_id}"
+        result = summarize_with_gemini(url)
+        if not result:
+            return jsonify({"error": "Gemini unavailable or quota exceeded"}), 503
+        # Save back to JSON
+        if os.path.exists(DATA_FILE):
+            with open(DATA_FILE, encoding="utf-8") as f:
+                data = json.load(f)
+            for v in data.get("videos", []):
+                if v["id"] == vid_id:
+                    v["gemini"] = result
+                    break
+            with open(DATA_FILE, "w", encoding="utf-8") as f:
+                json.dump(data, f, ensure_ascii=False, indent=2)
+        return jsonify({"status": "ok", "gemini": result})
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+
 @app.route("/calendar")
 def calendar_page():
     return render_template("calendar.html")

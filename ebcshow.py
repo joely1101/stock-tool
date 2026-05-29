@@ -9,7 +9,9 @@ import os, re, json, datetime, logging, urllib.request, html
 
 log = logging.getLogger(__name__)
 
-CHANNEL_ID  = "UCQvsuaih5lE0n_Ne54nNezg"   # @EBCmoneyshow
+CHANNEL_ID   = "UCQvsuaih5lE0n_Ne54nNezg"   # @EBCmoneyshow
+GEMINI_KEY   = os.environ.get("GEMINI_API_KEY", "AIzaSyB_Zp7E5jnPQUTBR6vJfjsyi1dqKpXH1hE")
+GEMINI_MODEL = "gemini-2.0-flash"
 RSS_URL     = f"https://www.youtube.com/feeds/videos.xml?channel_id={CHANNEL_ID}"
 DATA_FILE   = os.path.join(os.path.dirname(__file__), "static", "ebcshow.json")
 MAX_VIDEOS  = 6
@@ -60,6 +62,54 @@ def _extract_stocks(text):
 def _fetch_url(url, timeout=8):
     req = urllib.request.Request(url, headers=HEADERS)
     return urllib.request.urlopen(req, timeout=timeout).read().decode("utf-8", errors="replace")
+
+
+def summarize_with_gemini(video_url: str) -> dict | None:
+    """
+    Use Gemini to analyse the EBC Money Show video and return structured summary.
+    Returns dict with keys: stocks, views, market, key_points, raw
+    Returns None if API key missing / quota exceeded.
+    """
+    if not GEMINI_KEY:
+        return None
+    try:
+        from google import genai
+        from google.genai import types as gtypes
+
+        client = genai.Client(api_key=GEMINI_KEY)
+        prompt = """請用繁體中文分析這個理財達人秀（EBC財經台）節目，以JSON格式回覆：
+
+{
+  "stocks": [
+    {"code": "股票代碼（台股4位數字或美股英文）", "name": "公司名稱", "view": "看多/看空/中性", "target": "目標價（如有提及，否則null）", "note": "簡短說明"}
+  ],
+  "market": ["整體市場觀點要點1", "要點2", "要點3"],
+  "key_points": ["最重要投資建議1", "建議2", "建議3", "建議4", "建議5"],
+  "sentiment": "樂觀/謹慎/中性"
+}
+
+只包含節目中實際提到的股票。如果不確定，寧可少寫。格式嚴格按照上面的JSON。"""
+
+        response = client.models.generate_content(
+            model=GEMINI_MODEL,
+            contents=gtypes.Content(parts=[
+                gtypes.Part(file_data=gtypes.FileData(
+                    file_uri=video_url, mime_type="video/*"
+                )),
+                gtypes.Part(text=prompt)
+            ])
+        )
+        raw = response.text.strip()
+        # Strip markdown code fences if present
+        raw = re.sub(r'^```(?:json)?\s*', '', raw, flags=re.MULTILINE)
+        raw = re.sub(r'\s*```$', '', raw, flags=re.MULTILINE)
+        result = json.loads(raw)
+        result["raw"] = response.text
+        log.info("Gemini summary OK for %s", video_url)
+        return result
+    except Exception as e:
+        log.warning("Gemini summary failed: %s", str(e)[:200])
+        return None
 
 
 def fetch_rss_videos():
@@ -182,7 +232,22 @@ def run_daily_fetch():
         all_text = (v["title"] + " " + " ".join(details.get("hashtags", []))
                     + " " + " ".join(details.get("desc_lines", [])))
         tw, us = _extract_stocks(all_text)
-        full = {**v, **details, "tw_stocks": sorted(set(tw)), "us_stocks": sorted(set(us))}
+        # Gemini AI summary (only for full-version videos with chapters, to save API cost)
+        gemini = None
+        if GEMINI_KEY and len(details.get("chapters", [])) >= 2:
+            gemini = summarize_with_gemini(v["url"])
+            # Merge stocks from Gemini result if available
+            if gemini and gemini.get("stocks"):
+                for s in gemini["stocks"]:
+                    code = s.get("code", "")
+                    if code and re.match(r'^\d{4}$', code):
+                        tw.append(code)
+                    elif code and re.match(r'^[A-Z]{2,5}$', code):
+                        us.append(code)
+        full = {**v, **details,
+                "tw_stocks": sorted(set(tw)),
+                "us_stocks": sorted(set(us)),
+                "gemini":    gemini}
         results.append(full)
         existing[vid_id] = full
 

@@ -87,6 +87,38 @@
     .stock-tw { background:#1f3a5f; color:var(--blue); }
     .stock-us { background:#0d2a1a; color:var(--green); }
 
+    /* AI summary section */
+    .ai-section { background:var(--bg3); border-radius:8px; padding:.6rem .75rem;
+                  border-left:3px solid var(--purple); margin-top:.1rem; }
+    .ai-label   { font-size:.65rem; font-weight:700; color:var(--purple);
+                  text-transform:uppercase; letter-spacing:.06em; margin-bottom:.4rem; }
+    .ai-stocks  { display:flex; flex-wrap:wrap; gap:.3rem; margin-bottom:.5rem; }
+    .ai-stock-card { background:var(--bg2); border:1px solid var(--border);
+                     border-radius:6px; padding:.3rem .5rem; font-size:.75rem; }
+    .ai-stock-code { font-weight:700; color:var(--blue); }
+    .ai-stock-name { color:var(--muted); font-size:.7rem; }
+    .ai-stock-view { font-size:.68rem; font-weight:700; padding:.05rem .3rem;
+                     border-radius:3px; margin-left:.25rem; }
+    .view-bull { background:#0d2a1a; color:var(--green); }
+    .view-bear { background:#3d1515; color:var(--red); }
+    .view-neut { background:var(--bg3); color:var(--dim); }
+    .ai-points  { list-style:none; display:flex; flex-direction:column; gap:.25rem; }
+    .ai-points li { font-size:.76rem; color:var(--muted); line-height:1.4;
+                    padding-left:.75rem; position:relative; }
+    .ai-points li::before { content:"▸"; position:absolute; left:0;
+                             color:var(--purple); font-size:.7rem; }
+    .ai-market  { display:flex; flex-direction:column; gap:.2rem; margin-top:.35rem; }
+    .ai-market-item { font-size:.74rem; color:var(--muted); padding-left:.75rem;
+                      position:relative; }
+    .ai-market-item::before { content:"📊"; position:absolute; left:0; font-size:.65rem; }
+    .ai-sentiment { display:inline-block; font-size:.7rem; font-weight:700;
+                    padding:.1rem .4rem; border-radius:4px; margin-top:.3rem; }
+    .sent-opt  { background:#0d2a1a; color:var(--green); }
+    .sent-caut { background:#2d1f0e; color:var(--yellow); }
+    .sent-neut { background:var(--bg3); color:var(--dim); }
+    .ai-pending { font-size:.74rem; color:var(--dim); font-style:italic;
+                  padding:.4rem 0; }
+
     /* Watch button */
     .watch-btn { display:block; text-align:center; padding:.38rem;
                  border-radius:6px; background:#3d1515; color:var(--red);
@@ -163,6 +195,37 @@ function renderCard(v) {
     `<span class="stock-chip stock-us">$${s}</span>`
   ).join("");
 
+  // Gemini AI summary section
+  let geminiHtml = "";
+  const g = v.gemini;
+  if (g) {
+    const sentCls = g.sentiment==="樂觀"?"sent-opt":g.sentiment==="謹慎"?"sent-caut":"sent-neut";
+    const stockCards = (g.stocks||[]).map(s => {
+      const viewCls = s.view&&s.view.includes("多")?"view-bull":s.view&&s.view.includes("空")?"view-bear":"view-neut";
+      return `<div class="ai-stock-card">
+        <span class="ai-stock-code">${s.code}</span>
+        <span class="ai-stock-name">${s.name||""}</span>
+        <span class="ai-stock-view ${viewCls}">${s.view||""}</span>
+        ${s.target?`<span style="font-size:.68rem;color:var(--yellow);margin-left:.2rem">目標:${s.target}</span>`:""}
+      </div>`;
+    }).join("");
+    const keyPts = (g.key_points||[]).map(p=>`<li>${p}</li>`).join("");
+    const mktPts = (g.market||[]).map(p=>`<div class="ai-market-item">${p}</div>`).join("");
+    geminiHtml = `
+    <div class="ai-section">
+      <div class="ai-label">🤖 Gemini AI 節目分析
+        ${g.sentiment?`<span class="ai-sentiment ${sentCls}">${g.sentiment}</span>`:""}
+      </div>
+      ${stockCards?`<div class="ai-stocks">${stockCards}</div>`:""}
+      ${mktPts?`<div class="ai-market">${mktPts}</div>`:""}
+      ${keyPts?`<ul class="ai-points">${keyPts}</ul>`:""}
+    </div>`;
+  } else if (v.chapters && v.chapters.length >= 2) {
+    geminiHtml = `<div class="ai-section"><div class="ai-pending">🤖 AI 摘要待生成
+      <button onclick="runGemini('${v.id}',this)" style="margin-left:.5rem;font-size:.72rem;padding:.1rem .5rem;background:#1e1040;color:#c084fc;border:1px solid #7c3aed55;border-radius:4px;cursor:pointer;">▶ 立即分析</button>
+    </div></div>`;
+  }
+
   const descHtml = (v.desc_lines||[]).map(l =>
     `<div style="font-size:.76rem;color:var(--muted);line-height:1.4">${l}</div>`
   ).join("");
@@ -185,6 +248,7 @@ function renderCard(v) {
       ${chapters ? `<div class="chapters"><div class="chap-title">📋 討論主題</div>${chapters}</div>` : ""}
       ${tags ? `<div class="tags">${tags}</div>` : ""}
       ${(twChips||usChips) ? `<div class="stocks">${twChips}${usChips}</div>` : ""}
+      ${geminiHtml}
       <a class="watch-btn" href="${v.url}" target="_blank" rel="noopener">▶ 觀看影片</a>
     </div>
   </div>`;
@@ -226,6 +290,26 @@ async function refresh() {
     alert("更新失敗：" + e.message);
   } finally {
     btn.disabled = false; btn.textContent = "🔄 立即更新";
+  }
+}
+
+async function runGemini(vidId, btn) {
+  btn.disabled = true; btn.textContent = "分析中…(30-60秒)";
+  try {
+    const res = await fetch("/ebcshow/summarize", {
+      method:"POST", headers:{"Content-Type":"application/json"},
+      body: JSON.stringify({id: vidId})
+    });
+    const data = await res.json();
+    if (data.error) {
+      alert("分析失敗：" + data.error + "\n\n請確認 Gemini API 點數是否充足");
+      btn.disabled = false; btn.textContent = "▶ 立即分析";
+      return;
+    }
+    await loadData();  // refresh to show new summary
+  } catch(e) {
+    alert("錯誤：" + e.message);
+    btn.disabled = false; btn.textContent = "▶ 立即分析";
   }
 }
 
