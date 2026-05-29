@@ -740,13 +740,25 @@ def ebcshow_summarize():
         result = summarize_with_gemini(url)
         if not result:
             return jsonify({"error": "Gemini unavailable or quota exceeded"}), 503
-        # Save back to JSON
+        # Save back to JSON + merge Gemini stocks
         if os.path.exists(DATA_FILE):
             with open(DATA_FILE, encoding="utf-8") as f:
                 data = json.load(f)
+            import re as _re
             for v in data.get("videos", []):
                 if v["id"] == vid_id:
                     v["gemini"] = result
+                    # Merge Gemini-detected stocks
+                    tw = list(v.get("tw_stocks", []))
+                    us = list(v.get("us_stocks", []))
+                    for s in result.get("stocks", []):
+                        code = s.get("code", "")
+                        if code and _re.match(r'^\d{4}$', code) and code not in tw:
+                            tw.append(code)
+                        elif code and _re.match(r'^[A-Z]{2,5}$', code) and code not in us:
+                            us.append(code)
+                    v["tw_stocks"] = sorted(set(tw))
+                    v["us_stocks"] = sorted(set(us))
                     break
             with open(DATA_FILE, "w", encoding="utf-8") as f:
                 json.dump(data, f, ensure_ascii=False, indent=2)

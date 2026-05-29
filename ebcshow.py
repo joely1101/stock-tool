@@ -222,27 +222,49 @@ def run_daily_fetch():
     results = []
     for v in rss_videos:
         vid_id = v["id"]
-        if vid_id in existing and existing[vid_id].get("chapters"):
-            # Already have detailed data — reuse
-            results.append(existing[vid_id])
+        cached = existing.get(vid_id)
+
+        if cached:
+            # Video already scraped — check if Gemini summary is still needed
+            if not cached.get("gemini") and GEMINI_KEY:
+                log.info("Running Gemini on cached video %s (no summary yet)", vid_id)
+                gemini = summarize_with_gemini(v["url"])
+                if gemini:
+                    cached["gemini"] = gemini
+                    # Merge Gemini-detected stocks into cached lists
+                    tw = list(cached.get("tw_stocks", []))
+                    us = list(cached.get("us_stocks", []))
+                    for s in gemini.get("stocks", []):
+                        code = s.get("code", "")
+                        if code and re.match(r'^\d{4}$', code) and code not in tw:
+                            tw.append(code)
+                        elif code and re.match(r'^[A-Z]{2,5}$', code) and code not in us:
+                            us.append(code)
+                    cached["tw_stocks"] = sorted(set(tw))
+                    cached["us_stocks"] = sorted(set(us))
+                    existing[vid_id] = cached
+                    log.info("Gemini summary saved for %s", vid_id)
+            else:
+                log.info("Reusing fully cached video %s (gemini=%s)",
+                         vid_id, "yes" if cached.get("gemini") else "no key")
+            results.append(cached)
             continue
-        # Scrape page for details
+
+        # New video — scrape page + run Gemini
+        log.info("New video %s — scraping + Gemini", vid_id)
         details = scrape_video_page(vid_id)
-        # Extract stocks from all text
         all_text = (v["title"] + " " + " ".join(details.get("hashtags", []))
                     + " " + " ".join(details.get("desc_lines", [])))
         tw, us = _extract_stocks(all_text)
-        # Gemini AI summary (run for all videos)
         gemini = None
         if GEMINI_KEY:
             gemini = summarize_with_gemini(v["url"])
-            # Merge stocks from Gemini result if available
-            if gemini and gemini.get("stocks"):
-                for s in gemini["stocks"]:
+            if gemini:
+                for s in gemini.get("stocks", []):
                     code = s.get("code", "")
-                    if code and re.match(r'^\d{4}$', code):
+                    if code and re.match(r'^\d{4}$', code) and code not in tw:
                         tw.append(code)
-                    elif code and re.match(r'^[A-Z]{2,5}$', code):
+                    elif code and re.match(r'^[A-Z]{2,5}$', code) and code not in us:
                         us.append(code)
         full = {**v, **details,
                 "tw_stocks": sorted(set(tw)),
