@@ -3,6 +3,35 @@ import os
 import re
 import time
 import threading
+
+# ── Global Gemini lock (atomic file, shared across all workers & pages) ───────
+_GEMINI_LOCK = "/tmp/gemini_global.lock"
+
+def _gemini_acquire(vid_id, page):
+    """Atomic acquire. Returns True if this caller got the lock."""
+    try:
+        fd = os.open(_GEMINI_LOCK, os.O_CREAT | os.O_EXCL | os.O_WRONLY)
+        with os.fdopen(fd, "w") as f:
+            json.dump({"vid_id": vid_id, "page": page, "started": int(time.time())}, f)
+        return True
+    except (FileExistsError, OSError):
+        return False
+
+def _gemini_release():
+    try: os.remove(_GEMINI_LOCK)
+    except: pass
+
+def _gemini_lock_info():
+    """Return current lock info, or None. Auto-expires after 5 min."""
+    try:
+        with open(_GEMINI_LOCK) as f:
+            info = json.load(f)
+        if int(time.time()) - info.get("started", 0) > 300:   # 5-min stale guard
+            _gemini_release()
+            return None
+        return info
+    except Exception:
+        return None
 from concurrent.futures import ThreadPoolExecutor
 from datetime import datetime
 from zoneinfo import ZoneInfo
@@ -730,6 +759,15 @@ def ebcshow_refresh():
 
 _gemini_jobs = {}   # vid_id → "processing" | "done" | "error"
 
+@app.route("/gemini/status")
+def gemini_global_status():
+    """Global Gemini lock status — used by all pages to check if any job is running."""
+    info = _gemini_lock_info()
+    if info:
+        return jsonify({"running": True,  "vid_id": info["vid_id"],
+                        "page": info["page"], "started": info["started"]})
+    return jsonify({"running": False})
+
 @app.route("/ebcshow/summarize", methods=["POST"])
 def ebcshow_summarize():
     """Start Gemini summary in background thread — returns immediately."""
@@ -737,12 +775,16 @@ def ebcshow_summarize():
     if not vid_id:
         return jsonify({"error": "id required"}), 400
 
-    # Already done?
-    if _gemini_jobs.get(vid_id) == "done":
-        return jsonify({"status": "done"})
-    # Already running?
-    if _gemini_jobs.get(vid_id) == "processing":
-        return jsonify({"status": "processing"})
+    # Check global lock (shared across all workers, pages, clients)
+    lock_info = _gemini_lock_info()
+    if lock_info:
+        return jsonify({"status": "locked",
+                        "message": f"另一影片正在分析中 ({lock_info['page']})",
+                        "locked_by": lock_info["vid_id"]}), 429
+
+    # Try to acquire global lock
+    if not _gemini_acquire(vid_id, "ebcshow"):
+        return jsonify({"status": "locked", "message": "分析鎖定中，請稍後再試"}), 429
 
     def _run():
         marker = f"/tmp/gemini_done_{vid_id}"
@@ -776,13 +818,13 @@ def ebcshow_summarize():
                 with open(tmp, "w", encoding="utf-8") as f:
                     json.dump(data, f, ensure_ascii=False, indent=2)
                 os.replace(tmp, DATA_FILE)   # atomic rename — never partial
-            # Write marker file last (signals "done" to all workers)
             open(marker, "w").close()
         except Exception as e:
             app.logger.error("Gemini job error %s: %s", vid_id, e)
             open(f"/tmp/gemini_err_{vid_id}", "w").close()
+        finally:
+            _gemini_release()   # always release global lock
 
-    _gemini_jobs[vid_id] = "processing"
     threading.Thread(target=_run, daemon=True).start()
     return jsonify({"status": "processing"})
 
@@ -1239,19 +1281,25 @@ def ustv_refresh():
     except Exception as e:
         return jsonify({"error": str(e)}), 500
 
-_ustv_jobs = {}
-
 @app.route("/ustv/summarize", methods=["POST"])
 def ustv_summarize():
     vid_id = request.json.get("id","") if request.is_json else ""
     if not vid_id:
         return jsonify({"error": "id required"}), 400
-    if _ustv_jobs.get(vid_id) == "processing":
-        return jsonify({"status": "processing"})
+
+    # Check global lock
+    lock_info = _gemini_lock_info()
+    if lock_info:
+        return jsonify({"status": "locked",
+                        "message": f"另一影片正在分析中 ({lock_info['page']})",
+                        "locked_by": lock_info["vid_id"]}), 429
+    if not _gemini_acquire(vid_id, "ustv"):
+        return jsonify({"status": "locked", "message": "分析鎖定中，請稍後再試"}), 429
+
     def _run():
         marker = f"/tmp/gemini_done_ustv_{vid_id}"
         try:
-            from ebcshow import summarize_with_gemini, DATA_FILE as EBC_FILE
+            from ebcshow import summarize_with_gemini
             from ustv import DATA_FILE
             import re as _re
             url    = f"https://www.youtube.com/watch?v={vid_id}"
@@ -1282,7 +1330,9 @@ def ustv_summarize():
         except Exception as e:
             app.logger.error("USTV Gemini error %s: %s", vid_id, e)
             open(f"/tmp/gemini_err_ustv_{vid_id}", "w").close()
-    _ustv_jobs[vid_id] = "processing"
+        finally:
+            _gemini_release()   # always release global lock
+
     threading.Thread(target=_run, daemon=True).start()
     return jsonify({"status": "processing"})
 

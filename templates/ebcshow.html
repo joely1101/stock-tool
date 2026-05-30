@@ -346,6 +346,15 @@ async function runGemini(vidId, btn) {
     alert("⚠️ Only one video for Gemini at a time.\n請等待目前影片分析完成後再試。");
     return;
   }
+  // Check server-side global lock (other pages / other clients)
+  try {
+    const gs = await fetch("/gemini/status").then(r=>r.json());
+    if (gs.running) {
+      const where = gs.page === "ebcshow" ? "達人秀" : gs.page === "ustv" ? "錢線百分百" : gs.page;
+      alert(`⚠️ Only one video for Gemini at a time.\n目前「${where}」頁面有影片正在分析，請稍後再試。`);
+      return;
+    }
+  } catch(e) {}
   _geminiRunning = true;
   btn.disabled = true; btn.textContent = "啟動中…";
 
@@ -379,6 +388,11 @@ async function runGemini(vidId, btn) {
     catch(e) {
       _finish(false);
       alert("伺服器錯誤，請稍後再試\n" + text.slice(0,200));
+      return;
+    }
+    if (data.status === "locked") {
+      _finish(false);
+      alert("⚠️ Only one video for Gemini at a time.\n" + (data.message||"請稍後再試"));
       return;
     }
     if (data.error) {
