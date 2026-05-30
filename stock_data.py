@@ -1011,6 +1011,7 @@ def analyze_stock(symbol: str) -> dict:
             "symbol": symbol,                  # full yfinance symbol
             "display_symbol": display_symbol,  # badge label (no suffix)
             "is_taiwan": is_taiwan,
+            "is_etf":    info.get("quoteType","").upper() in ("ETF","MUTUALFUND"),
             "currency": currency,
             "company_name": company_name,
             "price_source":      price_source,

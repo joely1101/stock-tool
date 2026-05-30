@@ -1493,6 +1493,10 @@ function renderTWInst(data) {
 }
 
 function renderUSInsider(data) {
+  if (data.is_etf) return `<div class="inst-section">
+    <div class="inst-title">👤 內部人交易</div>
+    <span class="na" style="font-size:.78rem">${data.note || "ETF — 無內部人交易資料 (N/A)"}</span>
+  </div>`;
   if (!data.net_shares && !data.transactions?.length) return '';
   const net = typeof data.net_shares === 'number' ? data.net_shares
             : parseInt(String(data.net_shares||'0').replace(/,/g,'')) || 0;
@@ -1577,14 +1581,21 @@ function fvUpside(val, upside, fmt) {
   return '<span class="' + cls + '">' + fmt + '</span>';
 }
 function fvPanel(r) {
+  const isEtf = r.is_etf;
+  const note  = isEtf
+    ? 'ETF 無 EPS/淨值/現金流 — 公允價值指標不適用'
+    : 'Graham=√(22.5×EPS×淨值) · DCF=10年現金流折現 · Lynch=EPS×成長率%';
+  const gFmt  = r.graham_fmt  || 'N/A';
+  const dFmt  = r.dcf_fmt     || 'N/A';
+  const lFmt  = r.lynch_fmt   || 'N/A';
   return '<div class="dg-group" style="min-width:220px;">'
     + '<div class="dg-title">💰 公允價值 (Fair Value)</div>'
     + '<div class="fv-grid">'
-    + '<div class="fv-row"><span class="fv-method">Graham</span><span class="fv-price">' + r.graham_fmt + '</span>' + fvUpside(r.graham, r.graham_upside, r.graham_upside_fmt) + '</div>'
-    + '<div class="fv-row"><span class="fv-method">DCF</span><span class="fv-price">'    + r.dcf_fmt    + '</span>' + fvUpside(r.dcf,    r.dcf_upside,    r.dcf_upside_fmt)    + '</div>'
-    + '<div class="fv-row"><span class="fv-method">Lynch</span><span class="fv-price">' + r.lynch_fmt  + '</span>' + fvUpside(r.lynch,  r.lynch_upside,  r.lynch_upside_fmt)  + '</div>'
+    + '<div class="fv-row"><span class="fv-method">Graham</span><span class="fv-price">' + gFmt + '</span>' + fvUpside(r.graham, r.graham_upside, r.graham_upside_fmt) + '</div>'
+    + '<div class="fv-row"><span class="fv-method">DCF</span><span class="fv-price">'    + dFmt + '</span>' + fvUpside(r.dcf,    r.dcf_upside,    r.dcf_upside_fmt)    + '</div>'
+    + '<div class="fv-row"><span class="fv-method">Lynch</span><span class="fv-price">' + lFmt + '</span>' + fvUpside(r.lynch,  r.lynch_upside,  r.lynch_upside_fmt)  + '</div>'
     + '</div>'
-    + '<div class="dg-hint" title="Graham=√(22.5×EPS×淨值) · DCF=10年現金流折現 · Lynch=EPS×成長率%">ℹ️ Graham保守 · DCF現金流 · Lynch成長 · 僅供參考</div>'
+    + '<div class="dg-hint" title="' + note + '">ℹ️ ' + (isEtf ? 'ETF — 此三項指標不適用' : 'Graham保守 · DCF現金流 · Lynch成長 · 僅供參考') + '</div>'
     + '</div>';
 }
 
@@ -1670,7 +1681,7 @@ function detailHtml(r) {
       </div>
       <div class="dg-hint">ℹ️ ROE&gt;15%管理效率佳 · D/E&lt;0.5財務穩健</div>
     </div>
-    ${(r.graham||r.dcf||r.lynch) ? fvPanel(r) : ''}
+    ${fvPanel(r)}
   </div>
   <div class="inst-section" id="inst-${escHtml(r.display_symbol||r.symbol)}">
     <div class="news-loading"><div class="spinner-ring" style="width:14px;height:14px;border-width:2px;display:inline-block;"></div>&nbsp;載入法人/內部人資料…</div>

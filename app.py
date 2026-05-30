@@ -1121,6 +1121,19 @@ def stock_institutional():
 
     result = {"symbol": sym, "type": "TW" if is_tw else "US"}
 
+    # Detect ETF — skip insider/institutional for US ETFs (N/A)
+    if not is_tw:
+        try:
+            import yfinance as _yf2
+            qt = _yf2.Ticker(sym).info.get("quoteType","").upper()
+            if qt in ("ETF","MUTUALFUND"):
+                result["is_etf"] = True
+                result["note"]   = "ETF/基金無內部人交易資料"
+                _cache.set(cache_key, result, ttl=86400)
+                return jsonify(result)
+        except Exception:
+            pass
+
     if is_tw:
         # ── Taiwan: TWSE T86 三大法人 (last 5 trading days) ──────────────────
         rows, today = [], _dt.date.today()

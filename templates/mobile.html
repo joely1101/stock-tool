@@ -1046,11 +1046,16 @@ function mFvUp(val, upside, fmt) {
   return '<span class="' + cls + '">' + fmt + '</span>';
 }
 function mFvPanel(r) {
+  const gFmt = r.graham_fmt || 'N/A';
+  const dFmt = r.dcf_fmt    || 'N/A';
+  const lFmt = r.lynch_fmt  || 'N/A';
   return '<div class="fv-mini-wrap">'
-    + '<div class="fv-mini-title">💰 公允價值 (Fair Value)</div>'
-    + '<div class="fv-mini-row"><span class="fv-mini-m">Graham</span><span class="fv-mini-p">' + r.graham_fmt + '</span>' + mFvUp(r.graham, r.graham_upside, r.graham_upside_fmt) + '</div>'
-    + '<div class="fv-mini-row"><span class="fv-mini-m">DCF</span><span class="fv-mini-p">'    + r.dcf_fmt    + '</span>' + mFvUp(r.dcf,    r.dcf_upside,    r.dcf_upside_fmt)    + '</div>'
-    + '<div class="fv-mini-row"><span class="fv-mini-m">Lynch</span><span class="fv-mini-p">' + r.lynch_fmt  + '</span>' + mFvUp(r.lynch,  r.lynch_upside,  r.lynch_upside_fmt)  + '</div>'
+    + '<div class="fv-mini-title">💰 公允價值 (Fair Value)'
+    + (r.is_etf ? ' <span style="font-size:.62rem;color:var(--dim);">(ETF不適用)</span>' : '')
+    + '</div>'
+    + '<div class="fv-mini-row"><span class="fv-mini-m">Graham</span><span class="fv-mini-p">' + gFmt + '</span>' + mFvUp(r.graham, r.graham_upside, r.graham_upside_fmt) + '</div>'
+    + '<div class="fv-mini-row"><span class="fv-mini-m">DCF</span><span class="fv-mini-p">'    + dFmt + '</span>' + mFvUp(r.dcf,    r.dcf_upside,    r.dcf_upside_fmt)    + '</div>'
+    + '<div class="fv-mini-row"><span class="fv-mini-m">Lynch</span><span class="fv-mini-p">' + lFmt + '</span>' + mFvUp(r.lynch,  r.lynch_upside,  r.lynch_upside_fmt)  + '</div>'
     + '</div>';
 }
 
@@ -1233,7 +1238,7 @@ function renderCards(results) {
 
         <button class="card-more-btn" onclick="toggleExtra(${i})">▼ 更多指標</button>
         <div class="card-extra" id="extra-${i}" data-sym="${esc(r.display_symbol||r.symbol)}">
-          ${(r.graham||r.dcf||r.lynch) ? mFvPanel(r) : ''}
+          ${mFvPanel(r)}
           <div class="extra-grid">
             <div class="metric sort-metric" onclick="mSortByCol('pe')"><span class="metric-label">前瞻PE${_mSortIcon('pe')}</span><span class="metric-val" style="color:var(--purple)">${r.forward_pe_fmt}</span></div>
             <div class="metric sort-metric" onclick="mSortByCol('peg')"><span class="metric-label">PEG${_mSortIcon('peg')}</span><span class="metric-val ${pegCls(r.peg_ratio)}">${r.peg_fmt}</span></div>
@@ -1434,6 +1439,11 @@ async function loadMobileInst(sym) {
           <span>${mFmt(r.dealer_net)}</span>
           <b>${mFmt(r.total_net)}</b>
         </div>`).join('')}
+      </div>`;
+    } else if (data.is_etf) {
+      el.innerHTML = `<div class="m-inst-wrap">
+        <div class="m-inst-title">👤 內部人交易</div>
+        <div style="font-size:.74rem;color:var(--dim);">${data.note||'ETF — 無內部人交易資料 (N/A)'}</div>
       </div>`;
     } else if (data.type === 'US') {
       const net = parseInt(String(data.net_shares||'0').replace(/,/g,'')) || 0;
