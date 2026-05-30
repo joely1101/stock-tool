@@ -668,6 +668,11 @@
       <span class="profile-panel-name" id="panelName">—</span>
       <button class="btn btn-ghost btn-sm" id="mPanelConfigBtn" onclick="toggleMobilePanel()" title="管理股票清單">⚙</button>
       <button class="btn btn-sync btn-sm" id="syncBtn" onclick="syncProfile()">⟳ 同步</button>
+      <span id="syncNotice" style="display:none;font-size:.68rem;font-weight:700;
+        color:#e3b341;background:#2d2200;border:1px solid #9e6a0355;
+        padding:.15rem .45rem;border-radius:4px;white-space:nowrap;">
+        ⚠️ 有新股票，請同步
+      </span>
       <button class="btn btn-ghost btn-sm" id="autoSyncBtn" onclick="toggleAutoSync()" title="每30秒自動同步">⏱ 自動</button>
       <span id="autoSyncCountdown" style="font-size:0.68rem;color:var(--dim);display:none;"></span>
       <button class="btn btn-ghost btn-sm view-toggle-btn" id="viewToggleBtn" onclick="toggleViewMode()">☰ 列表</button>
@@ -816,9 +821,23 @@ function renderChips(stocks) {
     </span>`).join("");
 }
 
+/* ── sync notice ── */
+function _checkSyncNotice() {
+  const el = document.getElementById("syncNotice");
+  if (el) el.style.display = localStorage.getItem("profile_needs_sync") ? "inline" : "none";
+}
+function _clearSyncNotice() {
+  localStorage.removeItem("profile_needs_sync");
+  const el = document.getElementById("syncNotice");
+  if (el) el.style.display = "none";
+}
+window.addEventListener("DOMContentLoaded", _checkSyncNotice);
+document.addEventListener("visibilitychange", () => { if (!document.hidden) _checkSyncNotice(); });
+
 /* ── sync ── */
 async function syncProfile() {
   if (!activeProfile) { showError("請先選擇投資組合"); return; }
+  _clearSyncNotice();
   const btn = document.getElementById("syncBtn");
   btn.disabled = true; btn.textContent = "…";
   showSpinner(true); clearError();

@@ -972,6 +972,11 @@
         <span id="mktStatusBar" style="font-size:0.75rem;display:none;gap:0.6rem;align-items:center;"></span>
         <span class="last-sync-badge" id="lastSyncBadge"></span>
         <button class="btn btn-sync" id="syncBtn" onclick="syncProfile()">⟳ 同步行情</button>
+        <span id="syncNotice" style="display:none;font-size:.75rem;font-weight:700;
+          color:#e3b341;background:#2d2200;border:1px solid #9e6a0355;
+          padding:.2rem .6rem;border-radius:5px;white-space:nowrap;">
+          ⚠️ 有新股票加入，請同步
+        </span>
         <button class="btn btn-ghost" id="autoSyncBtn" onclick="toggleAutoSync()"
                 title="每30秒自動同步">⏱ 自動</button>
         <span id="autoSyncCountdown" style="font-size:0.72rem;color:var(--dim);display:none;"></span>
@@ -1157,6 +1162,20 @@ function updateSyncBadge(last_sync) {
 }
 
 /* ─── sync ───────────────────────────────────────────────── */
+function _checkSyncNotice() {
+  const el = document.getElementById("syncNotice");
+  if (el) el.style.display = localStorage.getItem("profile_needs_sync") ? "inline" : "none";
+}
+function _clearSyncNotice() {
+  localStorage.removeItem("profile_needs_sync");
+  const el = document.getElementById("syncNotice");
+  if (el) el.style.display = "none";
+}
+// Check on load
+window.addEventListener("DOMContentLoaded", _checkSyncNotice);
+// Also check when page becomes visible (user switched tabs)
+document.addEventListener("visibilitychange", () => { if (!document.hidden) _checkSyncNotice(); });
+
 async function syncProfile() {
   if (!activeProfile) return;
   const btn = document.getElementById("syncBtn");
@@ -1164,6 +1183,7 @@ async function syncProfile() {
   btn.textContent = "同步中…";
   showSpinner(true);
   clearError();
+  _clearSyncNotice();
 
   try {
     const res  = await fetch(`/profiles/${encodeURIComponent(activeProfile)}/sync`, { method: "POST" });

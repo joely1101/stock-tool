@@ -515,6 +515,7 @@ async function toggleStock(el) {
       stocks.splice(idx, 1);   // remove
     } else if (!inProf) {
       stocks.push(sym);         // add
+      localStorage.setItem("profile_needs_sync", "1");  // notify profile page
     }
 
     await fetch(`/profiles/${encodeURIComponent(name)}`, {
