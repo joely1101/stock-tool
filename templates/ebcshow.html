@@ -171,6 +171,26 @@
       .card-grid { grid-template-columns:1fr; }
       .content   { padding:.6rem .75rem 2rem; }
     }
+    /* ── Stock action popup ── */
+    .sap { position:fixed; z-index:1000; background:var(--bg2);
+           border:1px solid var(--border); border-radius:10px;
+           box-shadow:0 8px 24px rgba(0,0,0,.5);
+           min-width:180px; font-size:.82rem; overflow:hidden; }
+    .sap-title { padding:.5rem .75rem; font-weight:700; color:var(--blue);
+                 border-bottom:1px solid var(--border); font-size:.85rem; }
+    .sap-item  { display:flex; align-items:center; justify-content:space-between;
+                 padding:.42rem .75rem; cursor:pointer; gap:.75rem; }
+    .sap-item:hover { background:var(--bg3); }
+    .sap-name  { color:var(--text); font-weight:600; }
+    .sap-status { font-size:.72rem; font-weight:700; white-space:nowrap; }
+    .sap-in  .sap-status { color:var(--green); }
+    .sap-add .sap-status { color:var(--dim); }
+    .sap-empty { padding:.5rem .75rem; color:var(--dim); font-size:.78rem; }
+    /* clickable chips */
+    .stock-chip { cursor:pointer; transition:opacity .12s; }
+    .stock-chip:hover { opacity:.75; }
+    .ai-stock-card { cursor:pointer; }
+    .ai-stock-card:hover { border-color:var(--blue); }
   </style>
 </head>
 <body>
@@ -214,10 +234,10 @@ function renderCard(v) {
   ).join("");
 
   const twChips = (v.tw_stocks||[]).map(s =>
-    `<span class="stock-chip stock-tw">${s}</span>`
+    `<span class="stock-chip stock-tw" onclick="clickStock('${s}',true,event)">${s}</span>`
   ).join("");
   const usChips = (v.us_stocks||[]).map(s =>
-    `<span class="stock-chip stock-us">$${s}</span>`
+    `<span class="stock-chip stock-us" onclick="clickStock('${s}',false,event)">$${s}</span>`
   ).join("");
 
   // Gemini AI summary section
@@ -227,7 +247,8 @@ function renderCard(v) {
     const sentCls = g.sentiment==="樂觀"?"sent-opt":g.sentiment==="謹慎"?"sent-caut":"sent-neut";
     const stockCards = (g.stocks||[]).map(s => {
       const viewCls = s.view&&s.view.includes("多")?"view-bull":s.view&&s.view.includes("空")?"view-bear":"view-neut";
-      return `<div class="ai-stock-card">
+      const isTW = /^\d{4,5}$/.test(s.code||"");
+      return `<div class="ai-stock-card" onclick="clickStock('${s.code}',${isTW},event)">
         <span class="ai-stock-code">${s.code}</span>
         <span class="ai-stock-name">${s.name||""}</span>
         <span class="ai-stock-view ${viewCls}">${s.view||""}</span>
@@ -428,6 +449,89 @@ async function _resumePending() {
     };
     _startPolling(vidId, btn, onFinish);
   }
+}
+
+// ── Stock → Profile feature ───────────────────────────────────────────────────
+let _profilesCache = null;
+
+async function _loadProfilesData() {
+  if (_profilesCache) return _profilesCache;
+  try {
+    _profilesCache = await fetch("/profiles").then(r => r.json());
+  } catch(e) { _profilesCache = {}; }
+  return _profilesCache;
+}
+
+async function clickStock(sym, isTW, event) {
+  event.stopPropagation();
+  // Close any existing popup
+  document.querySelectorAll(".sap").forEach(el => el.remove());
+
+  const profiles = await _loadProfilesData();
+  const names = Object.keys(profiles);
+
+  const popup = document.createElement("div");
+  popup.className = "sap";
+
+  if (!names.length) {
+    popup.innerHTML = `<div class="sap-title">${isTW?"🇹🇼":"🇺🇸"} ${sym}</div>
+      <div class="sap-empty">尚無投資組合</div>`;
+  } else {
+    const items = names.map(name => {
+      const stocks = (profiles[name].stocks||[]).map(s=>s.toUpperCase());
+      const inProf = stocks.includes(sym.toUpperCase());
+      return `<div class="sap-item ${inProf?"sap-in":"sap-add"}" data-name="${name}" data-sym="${sym}" data-tw="${isTW}" onclick="toggleStock(this)">
+        <span class="sap-name">${name}</span>
+        <span class="sap-status">${inProf?"✓ 已在組合":"＋ 加入組合"}</span>
+      </div>`;
+    }).join("");
+    popup.innerHTML = `<div class="sap-title">${isTW?"🇹🇼":"🇺🇸"} ${sym}</div>${items}`;
+  }
+
+  // Position popup near clicked element
+  const r = event.target.getBoundingClientRect();
+  let top = r.bottom + 6, left = r.left;
+  popup.style.top  = Math.min(top,  window.innerHeight - 200) + "px";
+  popup.style.left = Math.min(left, window.innerWidth  - 200) + "px";
+  document.body.appendChild(popup);
+
+  // Close on outside click
+  setTimeout(() => document.addEventListener("click", () =>
+    document.querySelectorAll(".sap").forEach(el => el.remove()), {once:true}), 50);
+}
+
+async function toggleStock(el) {
+  const name  = el.dataset.name;
+  const sym   = el.dataset.sym;
+  const inProf = el.classList.contains("sap-in");
+  el.style.opacity = ".5";
+
+  try {
+    const data   = await fetch(`/profiles/${encodeURIComponent(name)}`).then(r=>r.json());
+    let stocks   = [...(data.stocks||[])];
+    const idx    = stocks.map(s=>s.toUpperCase()).indexOf(sym.toUpperCase());
+
+    if (inProf && idx >= 0) {
+      stocks.splice(idx, 1);   // remove
+    } else if (!inProf) {
+      stocks.push(sym);         // add
+    }
+
+    await fetch(`/profiles/${encodeURIComponent(name)}`, {
+      method:"PUT", headers:{"Content-Type":"application/json"},
+      body: JSON.stringify({stocks})
+    });
+
+    // Update UI
+    const nowIn = !inProf;
+    el.className = "sap-item " + (nowIn ? "sap-in" : "sap-add");
+    el.querySelector(".sap-status").textContent = nowIn ? "✓ 已在組合" : "＋ 加入組合";
+    // Invalidate cache so next click re-fetches
+    _profilesCache = null;
+  } catch(e) {
+    alert("操作失敗：" + e.message);
+  }
+  el.style.opacity = "1";
 }
 
 loadData().then(_resumePending);
