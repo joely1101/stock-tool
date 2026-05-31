@@ -162,7 +162,8 @@ def run_daily_fetch():
         entry["category_icon"] = v.get("category_icon", "")
         results.append(entry)
 
-    all_videos = list({v["id"]: v for v in existing.values()}.values())
+    # Only keep videos from the current 4 playlists — discard old channel videos
+    all_videos = list({v["id"]: v for v in results}.values())
     all_videos.sort(key=lambda x: x.get("pub_ts", 0) or x.get("date", ""), reverse=True)
     all_videos = all_videos[:30]
 
