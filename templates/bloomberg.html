@@ -487,10 +487,19 @@ function _startPolling(vidId, btn, onFinish) {
 async function _resumePending() {
   const pending = _getPending();
   if (!pending.length) return;
+
+  // Bloomberg has category filters — clear filter so all videos are visible
+  // (the video being analyzed may be in a different category than current view)
+  if (pending.length > 0) setFilter('');
+
   for (const vidId of pending) {
     // Find the button for this video
     const btn = document.querySelector(`[data-vid="${vidId}"]`);
-    if (!btn) continue;
+    if (!btn) {
+      // Button not found even with all visible — Gemini must have completed already
+      _setPending(vidId, false);
+      continue;
+    }
     btn.disabled = true;
     btn.textContent = "AI 分析中 請稍後";
     btn.style.cssText = "background:#1e1040;color:#c084fc;border:1px solid #7c3aed55;";
