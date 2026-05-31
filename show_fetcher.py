@@ -4,6 +4,7 @@ Pass a ShowConfig to fetch RSS, scrape pages, extract stocks.
 """
 import os, re, json, datetime, logging, urllib.request, html as _html
 import calendar as _calendar
+from concurrent.futures import ThreadPoolExecutor, as_completed
 
 log = logging.getLogger(__name__)
 
@@ -151,49 +152,53 @@ def run_fetch(channel_id, data_file, gemini_key="", gemini_model="gemini-2.5-fla
             pass
 
     rss_videos = fetch_rss(channel_id, max_videos)
-    results = []
 
+    # Split into cached (instant) and new (need scraping)
+    cached_videos = []
+    new_videos    = []
     for v in rss_videos:
-        vid_id = v["id"]
-        cached = existing.get(vid_id)
+        if existing.get(v["id"]):
+            cached_videos.append(v)
+        else:
+            new_videos.append(v)
 
-        if cached:
-            if not cached.get("gemini") and gemini_key:
-                log.info("Running Gemini on cached %s", vid_id)
-                from ebcshow import summarize_with_gemini
-                g = summarize_with_gemini(v["url"])
-                if g:
-                    cached["gemini"] = g
-                    tw = list(cached.get("tw_stocks", []))
-                    us = list(cached.get("us_stocks", []))
-                    for s in g.get("stocks", []):
-                        c = s.get("code","")
-                        if c and re.match(r'^\d{4}$', c) and c not in tw: tw.append(c)
-                        elif c and re.match(r'^[A-Z]{2,5}$', c) and c not in us: us.append(c)
-                    cached["tw_stocks"] = sorted(set(tw))
-                    cached["us_stocks"] = sorted(set(us))
-                    existing[vid_id] = cached
-            results.append(cached)
-            continue
+    log.info("ShowFetcher: %d cached, %d new to scrape", len(cached_videos), len(new_videos))
 
-        # New video
+    # ── Scrape new videos in PARALLEL ──────────────────────────────────────
+    def _process_new(v):
+        vid_id  = v["id"]
         details = scrape_video_page(vid_id)
         all_text = (v["title"] + " " + " ".join(details.get("hashtags", []))
                     + " " + " ".join(details.get("desc_lines", [])))
         tw, us = extract_stocks(all_text)
-        gemini = None
-        if gemini_key:
-            from ebcshow import summarize_with_gemini
-            gemini = summarize_with_gemini(v["url"])
-            if gemini:
-                for s in gemini.get("stocks", []):
-                    c = s.get("code","")
-                    if c and re.match(r'^\d{4}$', c) and c not in tw: tw.append(c)
-                    elif c and re.match(r'^[A-Z]{2,5}$', c) and c not in us: us.append(c)
-        full = {**v, **details, "tw_stocks": sorted(set(tw)),
-                "us_stocks": sorted(set(us)), "gemini": gemini}
-        results.append(full)
-        existing[vid_id] = full
+        return {**v, **details,
+                "tw_stocks": sorted(set(tw)),
+                "us_stocks": sorted(set(us)),
+                "gemini":    None}   # Gemini runs separately on demand
+
+    scraped = {}
+    if new_videos:
+        workers = min(8, len(new_videos))
+        with ThreadPoolExecutor(max_workers=workers) as ex:
+            futs = {ex.submit(_process_new, v): v["id"] for v in new_videos}
+            for fut in as_completed(futs):
+                vid_id = futs[fut]
+                try:
+                    scraped[vid_id] = fut.result()
+                except Exception as e:
+                    log.warning("Scrape failed %s: %s", vid_id, e)
+
+    # ── Merge results ───────────────────────────────────────────────────────
+    results = []
+    for v in rss_videos:
+        vid_id = v["id"]
+        if vid_id in scraped:
+            full = scraped[vid_id]
+            existing[vid_id] = full
+            results.append(full)
+        else:
+            cached = existing.get(vid_id, v)
+            results.append(cached)
 
     all_videos = list({v["id"]: v for v in existing.values()}.values())
     all_videos.sort(key=lambda x: x.get("pub_ts", 0) or x.get("date",""), reverse=True)

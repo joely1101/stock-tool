@@ -6,6 +6,7 @@ Strategy (bot-detection-free):
   3. Extract TW/US stock codes from title + description + hashtags
 """
 import os, re, json, datetime, logging, urllib.request, html
+from concurrent.futures import ThreadPoolExecutor, as_completed
 
 log = logging.getLogger(__name__)
 
@@ -233,59 +234,45 @@ def run_daily_fetch():
             pass
 
     rss_videos = fetch_rss_videos()
-    results = []
-    for v in rss_videos:
-        vid_id = v["id"]
-        cached = existing.get(vid_id)
 
-        if cached:
-            # Video already scraped — check if Gemini summary is still needed
-            if not cached.get("gemini") and GEMINI_KEY:
-                log.info("Running Gemini on cached video %s (no summary yet)", vid_id)
-                gemini = summarize_with_gemini(v["url"])
-                if gemini:
-                    cached["gemini"] = gemini
-                    # Merge Gemini-detected stocks into cached lists
-                    tw = list(cached.get("tw_stocks", []))
-                    us = list(cached.get("us_stocks", []))
-                    for s in gemini.get("stocks", []):
-                        code = s.get("code", "")
-                        if code and re.match(r'^\d{4}$', code) and code not in tw:
-                            tw.append(code)
-                        elif code and re.match(r'^[A-Z]{2,5}$', code) and code not in us:
-                            us.append(code)
-                    cached["tw_stocks"] = sorted(set(tw))
-                    cached["us_stocks"] = sorted(set(us))
-                    existing[vid_id] = cached
-                    log.info("Gemini summary saved for %s", vid_id)
-            else:
-                log.info("Reusing fully cached video %s (gemini=%s)",
-                         vid_id, "yes" if cached.get("gemini") else "no key")
-            results.append(cached)
-            continue
+    # Split into cached and new
+    cached_vids = [v for v in rss_videos if existing.get(v["id"])]
+    new_vids    = [v for v in rss_videos if not existing.get(v["id"])]
+    log.info("EBC Show: %d cached, %d new to scrape", len(cached_vids), len(new_vids))
 
-        # New video — scrape page + run Gemini
-        log.info("New video %s — scraping + Gemini", vid_id)
+    # ── Scrape new videos in PARALLEL ──────────────────────────────────────
+    def _scrape_new(v):
+        vid_id  = v["id"]
         details = scrape_video_page(vid_id)
         all_text = (v["title"] + " " + " ".join(details.get("hashtags", []))
                     + " " + " ".join(details.get("desc_lines", [])))
         tw, us = _extract_stocks(all_text)
-        gemini = None
-        if GEMINI_KEY:
-            gemini = summarize_with_gemini(v["url"])
-            if gemini:
-                for s in gemini.get("stocks", []):
-                    code = s.get("code", "")
-                    if code and re.match(r'^\d{4}$', code) and code not in tw:
-                        tw.append(code)
-                    elif code and re.match(r'^[A-Z]{2,5}$', code) and code not in us:
-                        us.append(code)
-        full = {**v, **details,
+        return {**v, **details,
                 "tw_stocks": sorted(set(tw)),
                 "us_stocks": sorted(set(us)),
-                "gemini":    gemini}
-        results.append(full)
-        existing[vid_id] = full
+                "gemini":    None}
+
+    scraped = {}
+    if new_vids:
+        workers = min(8, len(new_vids))
+        with ThreadPoolExecutor(max_workers=workers) as ex:
+            futs = {ex.submit(_scrape_new, v): v["id"] for v in new_vids}
+            for fut in as_completed(futs):
+                vid_id = futs[fut]
+                try:
+                    scraped[vid_id] = fut.result()
+                    existing[vid_id] = scraped[vid_id]
+                except Exception as e:
+                    log.warning("Scrape failed %s: %s", vid_id, e)
+
+    # ── Merge: preserve order from RSS ────────────────────────────────────
+    results = []
+    for v in rss_videos:
+        vid_id = v["id"]
+        if vid_id in scraped:
+            results.append(scraped[vid_id])
+        else:
+            results.append(existing.get(vid_id, v))
 
     # Merge with previous and keep history
     all_videos = list({v["id"]: v for v in list(existing.values())}.values())
