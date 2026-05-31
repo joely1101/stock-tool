@@ -273,6 +273,11 @@ async function runScan() {
 
   try {
     const data = await fetch("/scan/run?market=" + _market).then(r => r.json());
+    if (data.locked) {
+      document.getElementById("content").innerHTML =
+        '<div class="empty-msg" style="color:var(--yellow)">⏳ ' + data.error + '</div>';
+      return;
+    }
     if (data.error) {
       document.getElementById("content").innerHTML =
         '<div class="empty-msg" style="color:var(--red)">掃描失敗：' + data.error + '</div>';

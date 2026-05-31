@@ -1366,6 +1366,20 @@ def scan_run():
     if cached:
         return jsonify(cached)
 
+    # Lightweight scan lock — prevent duplicate heavy yf.download() calls
+    scan_lock = f"/tmp/scan_running_{market}"
+    if os.path.exists(scan_lock):
+        # Check if stale (> 3 min)
+        if time.time() - os.path.getmtime(scan_lock) < 180:
+            return jsonify({"error": "掃描進行中，請稍後再試（約10-20秒）",
+                            "locked": True}), 429
+        os.remove(scan_lock)   # remove stale lock
+
+    try:
+        open(scan_lock, "w").close()
+    except Exception:
+        pass
+
     # Build ticker list
     if market == "TW":
         stock_list = _TW_SCAN_LIST
@@ -1387,6 +1401,8 @@ def scan_run():
             threads=True, progress=False
         )
     except Exception as e:
+        try: os.remove(scan_lock)
+        except Exception: pass
         return jsonify({"error": str(e)}), 500
 
     from stock_data import (detect_movement_signals, detect_tw_signals,
@@ -1446,6 +1462,8 @@ def scan_run():
         "ts":             int(time.time()),
     }
     _cache.set(cache_key, payload, ttl=1800)   # cache 30 min
+    try: os.remove(scan_lock)                  # release scan lock
+    except Exception: pass
     return jsonify(payload)
 
 @app.route("/cache/stats")
