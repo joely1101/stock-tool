@@ -44,7 +44,8 @@ log = logging.getLogger(__name__)
 
 CHANNEL_ID = "UC5fZv7bPcF5j2RsfO-9OiLA"   # Investor's Business Daily
 DATA_FILE  = os.path.join(os.path.dirname(__file__), "static", "ibd.json")
-GEMINI_KEY = os.environ.get("GEMINI_API_KEY", "")
+GEMINI_KEY   = os.environ.get("GEMINI_API_KEY", "")
+GEMINI_MODEL = "gemini-2.5-flash"
 
 
 def run_daily_fetch():
@@ -107,6 +108,52 @@ def run_daily_fetch():
     os.replace(tmp, DATA_FILE)
     log.info("IBD: saved %d videos", len(all_videos))
     return payload
+
+
+def summarize_ibd(video_url: str):
+    """IBD-specific Gemini summary using English prompt."""
+    if not GEMINI_KEY:
+        return None
+    try:
+        from google import genai
+        from google.genai import types as gtypes
+        client = genai.Client(api_key=GEMINI_KEY)
+        prompt = """Analyze this Investor's Business Daily (IBD) video and return JSON:
+
+{
+  "stocks": [
+    {"code": "TICKER (US stock symbol, 2-5 uppercase letters)", "name": "Company Name",
+     "view": "bullish/bearish/neutral", "target": "price target if mentioned or null",
+     "note": "brief analysis note"}
+  ],
+  "market": ["key market observation 1", "observation 2", "observation 3"],
+  "key_points": ["top IBD investment insight 1", "insight 2", "insight 3", "insight 4", "insight 5"],
+  "sentiment": "optimistic/cautious/neutral"
+}
+
+Only include stocks explicitly discussed. Use real US ticker symbols only.
+Respond with valid JSON only, no markdown."""
+
+        response = client.models.generate_content(
+            model=GEMINI_MODEL,
+            contents=gtypes.Content(parts=[
+                gtypes.Part(file_data=gtypes.FileData(
+                    file_uri=video_url, mime_type="video/*"
+                )),
+                gtypes.Part(text=prompt)
+            ])
+        )
+        raw = response.text.strip()
+        import re as _re2, json as _json2
+        raw = _re2.sub(r'^```(?:json)?\s*', '', raw, flags=8)
+        raw = _re2.sub(r'\s*```$', '', raw, flags=8)
+        result = _json2.loads(raw)
+        result["raw"] = response.text
+        log.info("IBD Gemini OK for %s", video_url)
+        return result
+    except Exception as e:
+        log.warning("IBD Gemini failed: %s", str(e)[:200])
+        return None
 
 
 if __name__ == "__main__":

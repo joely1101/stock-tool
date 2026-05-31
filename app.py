@@ -1298,10 +1298,9 @@ def ibd_summarize():
     def _run():
         marker = f"/tmp/gemini_done_ibd_{vid_id}"
         try:
-            from ebcshow import summarize_with_gemini
-            from ibd import DATA_FILE
+            from ibd import summarize_ibd, DATA_FILE
             import re as _re
-            result = summarize_with_gemini(f"https://www.youtube.com/watch?v={vid_id}")
+            result = summarize_ibd(f"https://www.youtube.com/watch?v={vid_id}")
             if not result:
                 open(f"/tmp/gemini_err_ibd_{vid_id}", "w").close(); return
             if os.path.exists(DATA_FILE):
@@ -1378,10 +1377,9 @@ def bloomberg_summarize():
         return jsonify({"status": "locked", "message": "分析鎖定中，請稍後再試"}), 429
     def _run():
         try:
-            from ebcshow import summarize_with_gemini
-            from bloomberg import DATA_FILE
+            from bloomberg import summarize_bloomberg, DATA_FILE
             import re as _re
-            result = summarize_with_gemini(f"https://www.youtube.com/watch?v={vid_id}")
+            result = summarize_bloomberg(f"https://www.youtube.com/watch?v={vid_id}")
             if not result:
                 open(f"/tmp/gemini_err_bloomberg_{vid_id}", "w").close(); return
             if os.path.exists(DATA_FILE):

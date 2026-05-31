@@ -13,7 +13,8 @@ log = logging.getLogger(__name__)
 
 CHANNEL_ID = "UCIALMKvObZNtJ6AmdCLP7Lg"   # Bloomberg Television
 DATA_FILE  = os.path.join(os.path.dirname(__file__), "static", "bloomberg.json")
-GEMINI_KEY = os.environ.get("GEMINI_API_KEY", "")
+GEMINI_KEY   = os.environ.get("GEMINI_API_KEY", "")
+GEMINI_MODEL = "gemini-2.5-flash"
 
 # Common words to skip for US ticker detection
 _NOT_TICKERS = {
@@ -134,6 +135,51 @@ def run_daily_fetch():
     os.replace(tmp, DATA_FILE)
     log.info("Bloomberg: saved %d videos", len(all_videos))
     return payload
+
+
+def summarize_bloomberg(video_url: str):
+    """Bloomberg-specific Gemini summary using English prompt."""
+    if not GEMINI_KEY:
+        return None
+    try:
+        from google import genai
+        from google.genai import types as gtypes
+        client = genai.Client(api_key=GEMINI_KEY)
+        prompt = """Analyze this Bloomberg Television video and return a JSON summary:
+
+{
+  "stocks": [
+    {"code": "TICKER (2-5 uppercase letters, US stock symbol)", "name": "Company Name",
+     "view": "bullish/bearish/neutral", "target": "price target if mentioned or null",
+     "note": "brief note"}
+  ],
+  "market": ["key market insight 1", "key insight 2", "key insight 3"],
+  "key_points": ["most important investment point 1", "point 2", "point 3", "point 4", "point 5"],
+  "sentiment": "optimistic/cautious/neutral"
+}
+
+Only include stocks explicitly mentioned. Use 2-5 letter uppercase US ticker symbols only.
+Respond with valid JSON only, no markdown formatting."""
+
+        response = client.models.generate_content(
+            model=GEMINI_MODEL,
+            contents=gtypes.Content(parts=[
+                gtypes.Part(file_data=gtypes.FileData(
+                    file_uri=video_url, mime_type="video/*"
+                )),
+                gtypes.Part(text=prompt)
+            ])
+        )
+        raw = response.text.strip()
+        raw = __import__('re').sub(r'^```(?:json)?\s*', '', raw, flags=8)
+        raw = __import__('re').sub(r'\s*```$', '', raw, flags=8)
+        result = __import__('json').loads(raw)
+        result["raw"] = response.text
+        log.info("Bloomberg Gemini OK for %s", video_url)
+        return result
+    except Exception as e:
+        log.warning("Bloomberg Gemini failed: %s", str(e)[:200])
+        return None
 
 
 if __name__ == "__main__":
