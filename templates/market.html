@@ -284,7 +284,7 @@ function sectionGainers(rows, market, src) {
       <tbody>${(rows||[]).map((r,i) => `
         <tr>
           <td class="rank">${i+1}</td>
-          <td class="sym" style="cursor:pointer" onclick="clickStock(r.symbol,market==='TW',event)">${esc(r.symbol)}</td>
+          <td class="sym" style="cursor:pointer" onclick="clickStock('${r.symbol}',${market==='TW'},event)">${esc(r.symbol)}</td>
           <td class="name">${esc(r.name)}</td>
           <td class="price">${r.price_fmt || "N/A"}</td>
           <td>${chgHtml(r.change_pct)}</td>
@@ -306,7 +306,7 @@ function sectionVolume(rows, market, src) {
       <tbody>${(rows||[]).map((r,i) => `
         <tr>
           <td class="rank">${i+1}</td>
-          <td class="sym" style="cursor:pointer" onclick="clickStock(r.symbol,market==='TW',event)">${esc(r.symbol)}</td>
+          <td class="sym" style="cursor:pointer" onclick="clickStock('${r.symbol}',${market==='TW'},event)">${esc(r.symbol)}</td>
           <td class="name">${esc(r.name)}</td>
           <td class="price">${r.price_fmt || "N/A"}</td>
           <td style="color:var(--muted)">${r.volume_fmt || "N/A"}</td>
@@ -356,7 +356,7 @@ function sectionExpert(rows, market, source, src) {
       <tbody>${(rows||[]).map((r,i) => `
         <tr>
           <td class="rank">${i+1}</td>
-          <td class="sym" style="cursor:pointer" onclick="clickStock(r.symbol,market==='TW',event)">${esc(r.symbol)}</td>
+          <td class="sym" style="cursor:pointer" onclick="clickStock('${r.symbol}',${market==='TW'},event)">${esc(r.symbol)}</td>
           <td class="name">${esc(r.name)}</td>
           <td class="price">${r.price_fmt || "N/A"}</td>
           <td>${market === "TW"
