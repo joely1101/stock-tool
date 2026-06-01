@@ -1629,7 +1629,7 @@ def scan_run():
         "results":        results,
         "ts":             int(time.time()),
     }
-    _cache.set(cache_key, payload, ttl=1800)   # cache 30 min
+    _cache.set(cache_key, payload, ttl=60)     # cache 1 min
     try: os.remove(scan_lock)                  # release scan lock
     except Exception: pass
     return jsonify(payload)
