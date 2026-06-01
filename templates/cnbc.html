@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8"/>
   <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
-  <title>理財達人秀摘要</title>
+  <title>CNBC Mad Money & Fast Money</title>
   <link rel="manifest" href="/static/manifest.json"/>
   <link rel="icon" type="image/png" sizes="192x192" href="/static/icon-192.png"/>
   <style>
@@ -20,7 +20,7 @@
     .topbar { display:flex; align-items:center; gap:.75rem; padding:0 1.25rem;
               height:50px; background:var(--bg2); border-bottom:1px solid var(--border);
               position:sticky; top:0; z-index:10; }
-    .topbar h1 { font-size:1rem; font-weight:700; color:var(--red); white-space:nowrap; }
+    .topbar h1 { font-size:1rem; font-weight:700; color:var(--blue); white-space:nowrap; }
     .nav-link  { color:var(--muted); font-size:.82rem; text-decoration:none;
                  padding:.3rem .7rem; border:1px solid var(--border); border-radius:6px; }
     .nav-link:hover { color:var(--text); border-color:var(--muted); }
@@ -155,7 +155,7 @@
     .spinner-wrap { display:flex; justify-content:center; align-items:center;
                     gap:.75rem; padding:4rem; color:var(--muted); }
     .spinner-ring { width:24px; height:24px; border:2px solid var(--border);
-                    border-top-color:var(--red); border-radius:50%;
+                    border-top-color:#1f6feb; border-radius:50%;
                     animation:spin .75s linear infinite; }
     @keyframes spin { to { transform:rotate(360deg); } }
 
@@ -196,13 +196,19 @@
 <body>
 
 <div class="topbar">
-  <h1>📺 理財達人秀摘要</h1>
+  <h1>📺 CNBC Mad Money & Fast Money</h1>
   <a class="nav-link" href="/">🏠 Home</a>
   <a class="nav-link" href="/market">📊 市場</a>
 </div>
 
 <div class="toolbar">
   <button class="btn-refresh" id="refreshBtn" onclick="refresh()">🔄 立即更新</button>
+  <div style="display:flex;gap:.35rem;flex-wrap:wrap;flex:1;">
+    <button class="btn-ghost" style="font-size:.76rem;padding:.28rem .65rem;border-radius:20px;" id="fAll" onclick="setFilter('')">全部</button>
+    <button class="btn-ghost" style="font-size:.76rem;padding:.28rem .65rem;border-radius:20px;" id="f1" onclick="setFilter('Mad Money')">🔥 Mad Money</button>
+    <button class="btn-ghost" style="font-size:.76rem;padding:.28rem .65rem;border-radius:20px;" id="f2" onclick="setFilter('Fast Money')">⚡ Fast Money</button>
+    <button class="btn-ghost" style="font-size:.76rem;padding:.28rem .65rem;border-radius:20px;" id="f3" onclick="setFilter('Halftime')">📊 Halftime</button>
+  </div>
   <span class="meta" id="metaText">自動每日早上 7:00 更新</span>
 </div>
 
@@ -243,8 +249,14 @@ function renderCard(v) {
   // Gemini AI summary section
   let geminiHtml = "";
   const g = v.gemini;
-  if (g) {
-    const sentCls = g.sentiment==="樂觀"?"sent-opt":g.sentiment==="謹慎"?"sent-caut":"sent-neut";
+  if (g && g.error) {
+    // Error case (e.g. video too long)
+    geminiHtml = `<div class="ai-section">
+      <div class="ai-label">🤖 Gemini AI</div>
+      <div style="font-size:.76rem;color:var(--yellow);padding:.2rem 0;">⚠️ ${g.message || g.error}</div>
+    </div>`;
+  } else if (g) {
+    const sentCls = g.sentiment==="樂觀"?"sent-opt":g.sentiment==="謹慎"?"sent-caut":g.sentiment==="cautious"?"sent-caut":g.sentiment==="optimistic"?"sent-opt":"sent-neut";
     const stockCards = (g.stocks||[]).map(s => {
       const viewCls = s.view&&s.view.includes("多")?"view-bull":s.view&&s.view.includes("空")?"view-bear":"view-neut";
       const isTW = /^\d{4,5}$/.test(s.code||"");
@@ -283,7 +295,8 @@ function renderCard(v) {
         <img src="${v.thumbnail}" alt="${v.title}" loading="lazy"
              onerror="this.src='https://img.youtube.com/vi/${v.id}/0.jpg'"/>
       </a>
-      ${v.pub_tw ? `<span class="thumb-date">${v.pub_tw} 🇹🇼</span>` : v.date ? `<span class="thumb-date">${v.date}</span>` : ""}
+      ${v.pub_tw ? `<span class="thumb-date">${v.pub_tw}</span>` : v.date ? `<span class="thumb-date">${v.date}</span>` : ""}
+      ${v.category ? `<span class="thumb-date" style="left:auto;right:.35rem;background:rgba(31,111,235,.8)">${v.category_icon||""} ${v.category}</span>` : ""}
       ${v.duration ? `<span class="thumb-dur">${v.duration}</span>` : ""}
     </div>
     <div class="card-body">
@@ -302,25 +315,24 @@ function renderCard(v) {
 
 async function loadData() {
   try {
-    const data = await fetch("/ebcshow/data").then(r=>r.json());
+    const data = await fetch("/cnbc/data").then(r=>r.json());
     if (data.error && !data.videos?.length) {
       document.getElementById("content").innerHTML =
-        `<div style="text-align:center;color:var(--red);padding:3rem">${data.error}</div>`;
+        `<div style="text-align:center;color:#1f6feb;padding:3rem">${data.error}</div>`;
       return;
     }
-    const videos = data.videos || [];
+    _allVideos = data.videos || [];
     document.getElementById("metaText").textContent =
-      `共 ${videos.length} 支影片 · 更新時間：${data.updated||"—"}`;
-    if (!videos.length) {
+      `共 ${_allVideos.length} 支影片 · 更新時間：${data.updated||"—"}`;
+    if (!_allVideos.length) {
       document.getElementById("content").innerHTML =
         '<div style="text-align:center;color:var(--muted);padding:3rem">尚無資料，請點擊「立即更新」</div>';
       return;
     }
-    document.getElementById("content").innerHTML =
-      `<div class="card-grid">${videos.map(renderCard).join("")}</div>`;
+    setFilter(_filterCat);   // apply current filter after reload
   } catch(e) {
     document.getElementById("content").innerHTML =
-      `<div style="text-align:center;color:var(--red);padding:3rem">載入失敗：${e.message}</div>`;
+      `<div style="text-align:center;color:#1f6feb;padding:3rem">載入失敗：${e.message}</div>`;
   }
 }
 
@@ -330,7 +342,7 @@ async function refresh() {
   document.getElementById("content").innerHTML =
     '<div class="spinner-wrap"><div class="spinner-ring"></div>正在抓取最新影片，約需 20 秒…</div>';
   try {
-    await fetch("/ebcshow/refresh", {method:"POST"});
+    await fetch("/cnbc/refresh", {method:"POST"});
     await loadData();
   } catch(e) {
     alert("更新失敗：" + e.message);
@@ -340,6 +352,35 @@ async function refresh() {
 }
 
 let _geminiRunning = false;
+let _filterCat = "";
+let _allVideos  = [];
+
+function setFilter(cat) {
+  _filterCat = cat;
+  // Update button styles
+  ["fAll","f1","f2","f3","f4"].forEach(id => {
+    const b = document.getElementById(id);
+    if (b) b.style.background = "";
+  });
+  const active = cat === "" ? "fAll" : cat.includes("Stock") ? "f1"
+    : cat.includes("Comm") ? "f2" : cat.includes("Tech") ? "f3" : "f4";
+  const ab = document.getElementById(active);
+  if (ab) ab.style.background = "var(--blue)";
+  renderFiltered();
+}
+
+function renderFiltered() {
+  const filtered = _filterCat
+    ? _allVideos.filter(v => (v.category||"").includes(_filterCat))
+    : _allVideos;
+  if (!filtered.length) {
+    document.getElementById("content").innerHTML =
+      `<div style="text-align:center;color:var(--muted);padding:3rem">本類別暫無影片</div>`;
+    return;
+  }
+  document.getElementById("content").innerHTML =
+    `<div class="card-grid">${filtered.map(renderCard).join("")}</div>`;
+}
 
 async function runGemini(vidId, btn) {
   if (_geminiRunning) {
@@ -350,7 +391,7 @@ async function runGemini(vidId, btn) {
   try {
     const gs = await fetch("/gemini/status").then(r=>r.json());
     if (gs.running) {
-      const names = {"ebcshow":"達人秀","ustv":"錢線百分百","ibd":"IBD","bloomberg":"Bloomberg市場分析","cnbc":"CNBC Mad Money"};
+      const names = {"ebcshow":"達人秀","ustv":"錢線百分百","ibd":"IBD","cnbc":"CNBC Mad Money"};
       const where = names[gs.page] || gs.page;
       alert(`⚠️ Only one video for Gemini at a time.\n目前「${where}」頁面有影片正在分析，請稍後再試。`);
       return;
@@ -379,7 +420,7 @@ async function runGemini(vidId, btn) {
   };
 
   try {
-    const res  = await fetch("/ebcshow/summarize", {
+    const res  = await fetch("/cnbc/summarize", {
       method:"POST", headers:{"Content-Type":"application/json"},
       body: JSON.stringify({id: vidId})
     });
@@ -427,7 +468,7 @@ function _getPending() {
 function _startPolling(vidId, btn, onFinish) {
   const poll = setInterval(async () => {
     try {
-      const s = await fetch(`/ebcshow/status?id=${vidId}`).then(r=>r.json());
+      const s = await fetch(`/cnbc/status?id=${vidId}`).then(r=>r.json());
       if (s.status === "done") {
         clearInterval(poll);
         onFinish(true);
@@ -445,10 +486,19 @@ function _startPolling(vidId, btn, onFinish) {
 async function _resumePending() {
   const pending = _getPending();
   if (!pending.length) return;
+
+  // Bloomberg has category filters — clear filter so all videos are visible
+  // (the video being analyzed may be in a different category than current view)
+  if (pending.length > 0) setFilter('');
+
   for (const vidId of pending) {
     // Find the button for this video
     const btn = document.querySelector(`[data-vid="${vidId}"]`);
-    if (!btn) continue;
+    if (!btn) {
+      // Button not found even with all visible — Gemini must have completed already
+      _setPending(vidId, false);
+      continue;
+    }
     btn.disabled = true;
     btn.textContent = "AI 分析中 請稍後";
     btn.style.cssText = "background:#1e1040;color:#c084fc;border:1px solid #7c3aed55;";
