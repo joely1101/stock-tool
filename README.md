@@ -331,7 +331,7 @@ def post_fork(server, worker):
 
 ```bash
 # 1. SSH into the instance
-ssh -i ~/.ssh/google_compute_engine 34.27.24.0
+ssh -i ~/.ssh/google_compute_engine YOUR_GCP_IP
 # or: gcloud compute ssh --zone=us-central1-a INSTANCE_NAME
 
 # 2. Install dependencies
@@ -615,7 +615,7 @@ ssh -i your-key.key ubuntu@your-oracle-domain.example.com \
 
 **GCP:**
 ```bash
-ssh 34.27.24.0 \
+ssh YOUR_GCP_IP \
   "sudo -u youruser bash -c 'cd /home/youruser/stock-tool && git pull origin main' && \
    sudo systemctl restart stocktool.service"
 ```
