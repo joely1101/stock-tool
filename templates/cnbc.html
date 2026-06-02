@@ -380,6 +380,15 @@ function renderFiltered() {
   }
   document.getElementById("content").innerHTML =
     `<div class="card-grid">${filtered.map(renderCard).join("")}</div>`;
+  // Restore "analyzing" state on any buttons that were re-created by this render
+  _getPending().forEach(vidId => {
+    const btn = document.querySelector(`[data-vid="${vidId}"]`);
+    if (btn) {
+      btn.disabled = true;
+      btn.textContent = "AI 分析中 請稍後";
+      btn.style.cssText = "background:#1e1040;color:#c084fc;border:1px solid #7c3aed55;";
+    }
+  });
 }
 
 async function runGemini(vidId, btn) {
