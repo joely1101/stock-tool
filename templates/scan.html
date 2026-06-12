@@ -74,24 +74,24 @@
     /* cells */
     .sym-cell .sym  { font-weight:700; color:var(--blue); }
     .sym-cell .co   { font-size:.7rem; color:var(--muted); display:block; }
-    .pos { color:var(--red);   font-weight:600; }
-    .neg { color:var(--green); font-weight:600; }
+    .pos { color:var(--green); font-weight:600; }
+    .neg { color:var(--red);   font-weight:600; }
     .na  { color:var(--dim); }
     .price-cell { font-weight:600; }
 
     /* rsi chip */
     .rsi-chip { display:inline-block; padding:.1rem .38rem; border-radius:4px;
                 font-size:.78rem; font-weight:700; }
-    .rsi-hot  { background:#0d2a1a; color:var(--green); }
-    .rsi-cold { background:#3d1515; color:var(--red); }
+    .rsi-hot  { background:#3d1515; color:var(--red); }
+    .rsi-cold { background:#0d2a1a; color:var(--green); }
     .rsi-norm { color:var(--muted); }
 
     /* signal chips */
     .sig-wrap { display:flex; gap:.25rem; flex-wrap:wrap; }
     .sig-chip { display:inline-block; font-size:.68rem; font-weight:700;
                 padding:.1rem .38rem; border-radius:4px; white-space:nowrap; }
-    .sig-bull { background:#3d1515; color:var(--red); }
-    .sig-bear { background:#0d2a1a; color:var(--green); }
+    .sig-bull { background:#0d2a1a; color:var(--green); }
+    .sig-bear { background:#3d1515; color:var(--red); }
     .sig-warn { background:#2d1f0e; color:var(--yellow); }
 
     /* ── Score info popup ── */
@@ -111,20 +111,20 @@
     .score-popup td:first-child { color:var(--muted); white-space:nowrap; }
     .score-popup td:last-child  { text-align:right; font-weight:700; }
     .score-popup .sep { border-top:1px solid var(--border); margin:.4rem 0; }
-    .sp-bull { color:var(--red);   }
-    .sp-bear { color:var(--green); }
+    .sp-bull { color:var(--green); }
+    .sp-bear { color:var(--red);   }
     .sp-note { font-size:.7rem; color:var(--dim); margin-top:.5rem; }
 
     /* momentum score badge */
     .score-badge { display:inline-block; min-width:2.4rem; text-align:center;
                    font-size:.82rem; font-weight:800; padding:.15rem .45rem;
                    border-radius:6px; }
-    .score-s3  { background:#3d1515; color:#f85149; border:1px solid #b22222; }  /* ≥6 */
-    .score-s2  { background:#3d1515; color:#f85149; }  /* 3-5 */
-    .score-s1  { background:#2d1515; color:#ff8888; }  /* 1-2 */
+    .score-s3  { background:#071a10; color:#3fb950; border:1px solid #238636; }  /* ≥6 */
+    .score-s2  { background:#0d2a1a; color:#3fb950; }  /* 3-5 */
+    .score-s1  { background:#1a2b1a; color:#7ee787; }  /* 1-2 */
     .score-s0  { background:var(--bg3); color:var(--dim); }  /* 0 */
-    .score-sm1 { background:#1a2b1a; color:#7ee787; }  /* -1 to -2 */
-    .score-sm2 { background:#0d2a1a; color:#3fb950; }  /* ≤ -3 */
+    .score-sm1 { background:#2d1515; color:#f85149; }  /* -1 to -2 */
+    .score-sm2 { background:#3d1515; color:#f85149; }  /* ≤ -3 */
 
     /* spinner */
     .spinner-wrap { display:flex; justify-content:center; align-items:center;
@@ -166,8 +166,8 @@
     .tw-card { background:var(--bg2); border:1px solid var(--border);
                border-radius:10px; overflow:hidden; display:flex; }
     .tw-card-bar { width:5px; flex-shrink:0; }
-    .tw-card-bar.bull { background:var(--red); }
-    .tw-card-bar.bear { background:var(--green); }
+    .tw-card-bar.bull { background:var(--green); }
+    .tw-card-bar.bear { background:var(--red); }
     .tw-card-bar.warn { background:var(--yellow); }
     .tw-card-body { flex:1; padding:.55rem .7rem; min-width:0; }
     .tw-card-top  { display:flex; align-items:center; gap:.4rem; margin-bottom:.25rem; }
@@ -382,7 +382,7 @@ function renderResults(all) {
       const kdHtml = r.kd_k != null
         ? `<span class="tw-card-kd">K:${r.kd_k} D:${r.kd_d}</span>
            <div class="kd-bar-wrap">
-             <div class="kd-bar"><div class="kd-bar-fill" style="width:${Math.min(r.kd_k,100)}%;background:${r.kd_k>r.kd_d?'#f85149':'#3fb950'}"></div></div>
+             <div class="kd-bar"><div class="kd-bar-fill" style="width:${Math.min(r.kd_k,100)}%;background:${r.kd_k>r.kd_d?'#3fb950':'#f85149'}"></div></div>
            </div>` : "";
       return `<div class="tw-card">
         <div class="tw-card-bar ${barCls}"></div>

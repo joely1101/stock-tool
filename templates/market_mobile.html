@@ -58,7 +58,7 @@
               white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
     .r-price { font-size:0.8rem; font-weight:600; min-width:70px; text-align:right; }
     .r-chg   { font-size:0.82rem; font-weight:600; min-width:60px; text-align:right; }
-    .pos { color:var(--red); } .neg { color:var(--green); } .neut { color:var(--muted); }
+    .pos { color:var(--green); } .neg { color:var(--red); } .neut { color:var(--muted); }
 
     /* sector bars */
     .sector-row { display:flex; align-items:center; gap:0.5rem;
@@ -270,7 +270,7 @@ function mSectors(rows, market, src) {
     <div>${(rows||[]).map(r=>{
       const pct=r.change_pct, cls=pct>0?"pos":pct<0?"neg":"neut";
       const w=pct!=null?Math.round(Math.abs(pct)/maxAbs*100):0;
-      const col=pct>0?"var(--red)":pct<0?"var(--green)":"var(--dim)";
+      const col=pct>0?"var(--green)":pct<0?"var(--red)":"var(--dim)";
       return `<div class="sector-row">
         <span class="s-name">${esc(r.name)}</span>
         <div class="s-bar-wrap"><div class="s-bar" style="width:${w}%;background:${col}"></div></div>

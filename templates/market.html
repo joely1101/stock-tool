@@ -87,8 +87,8 @@
     .rank  { color:var(--dim); width:28px; }
     .sym   { font-weight:700; color:var(--blue); }
     .name  { color:var(--muted); max-width:160px; overflow:hidden; text-overflow:ellipsis; }
-    .pos   { color:var(--red);   font-weight:600; }
-    .neg   { color:var(--green); font-weight:600; }
+    .pos   { color:var(--green); font-weight:600; }
+    .neg   { color:var(--red);   font-weight:600; }
     .neut  { color:var(--muted); }
     .price { font-weight:600; }
 
@@ -329,7 +329,7 @@ function sectionSectors(rows, market, src) {
       const pct = r.change_pct;
       const cls = pct > 0 ? "pos" : pct < 0 ? "neg" : "neut";
       const barW = pct != null ? Math.round(Math.abs(pct) / maxAbs * 100) : 0;
-      const barColor = pct > 0 ? "var(--red)" : pct < 0 ? "var(--green)" : "var(--dim)";
+      const barColor = pct > 0 ? "var(--green)" : pct < 0 ? "var(--red)" : "var(--dim)";
       return `<div class="sector-row">
         <span class="sector-name">${esc(r.name)}</span>
         <div class="sector-bar-wrap">
