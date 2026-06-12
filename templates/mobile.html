@@ -252,11 +252,11 @@
       padding: 0.2rem 0.55rem; border-radius: 6px;
       font-weight: 700; font-size: 0.78rem; white-space: nowrap;
     }
-    .rec-strong-buy { background: #0d2a1a; color: var(--green); border: 1px solid #238636; }
-    .rec-buy        { background: #0d2a1a; color: #56d364;      border: 1px solid #2ea04366; }
+    .rec-strong-buy { background: #3d1515; color: var(--red);    border: 1px solid #b22222; }
+    .rec-buy        { background: #3d1515; color: #ff8888;       border: 1px solid #b2222266; }
     .rec-hold       { background: #1c2128; color: var(--yellow); border: 1px solid #9e6a0366; }
     .rec-under      { background: #2d1f0e; color: var(--orange); border: 1px solid #bd561266; }
-    .rec-sell       { background: #3d1515; color: var(--red);   border: 1px solid #6e1a1a; }
+    .rec-sell       { background: #0d2a1a; color: var(--green);  border: 1px solid #238636; }
 
     /* price row */
     .card-price {
@@ -265,8 +265,8 @@
     }
     .price-now  { font-size: 1.25rem; font-weight: 700; }
     .price-target { font-size: 0.85rem; color: var(--muted); }
-    .price-up   { color: var(--green); }
-    .price-dn   { color: var(--red); }
+    .price-up   { color: var(--red); }
+    .price-dn   { color: var(--green); }
 
     /* key metrics row */
     .metrics {
@@ -281,19 +281,19 @@
     .metric-label { font-size: 0.62rem; color: var(--dim); text-transform: uppercase; letter-spacing: 0.04em; }
     .metric-val   { font-size: 0.82rem; font-weight: 600; }
 
-    .rsi-hot  { background:#3d1515; color:var(--red);    }  /* US overbought=sell=red */
-    .rsi-warm { color: var(--green); }
-    .rsi-cold { background:#0d2a1a; color:var(--green); }  /* US oversold=buy=green */
+    .rsi-hot  { background:#0d2a1a; color:var(--green); }  /* overbought=sell=green */
+    .rsi-warm { color: var(--red); }
+    .rsi-cold { background:#3d1515; color:var(--red);    }  /* oversold=buy=red */
     .rsi-norm { background:#2d1f0e; color:var(--orange); }  /* neutral=orange */
-    .macd-bull { color: var(--green); }
-    .macd-bear { color: var(--red); }
-    .kd-over   { color: #58a6ff;      font-weight:700; }
-    .kd-hot    { color: var(--orange); font-weight:700; }
+    .macd-bull { color: var(--red); }
+    .macd-bear { color: var(--green); }
+    .kd-over   { color: var(--red);    font-weight:700; }
+    .kd-hot    { color: var(--green);  font-weight:700; }
     .kd-norm    { color: var(--muted); }
-    .kd-tw-bull { color: var(--red);   font-weight:700; }  /* TW bull=red */
-    .kd-tw-bear { color: var(--green); font-weight:700; }  /* TW bear=green */
-    .pos { color: var(--green); }
-    .neg { color: var(--red); }
+    .kd-tw-bull { color: var(--red);   font-weight:700; }
+    .kd-tw-bear { color: var(--green); font-weight:700; }
+    .pos { color: var(--red); }
+    .neg { color: var(--green); }
     .na  { color: var(--dim); }
 
     /* comment */
@@ -318,16 +318,16 @@
     .m-inst-chips{ display:flex; gap:.3rem; flex-wrap:wrap; margin-bottom:.4rem; }
     .m-inst-chip { font-size:.68rem; font-weight:700; padding:.1rem .4rem;
                    border-radius:4px; white-space:nowrap; }
-    .m-ic-bull   { background:#0d2a1a; color:#3fb950; }
-    .m-ic-bear   { background:#3d1515; color:#f85149; }
+    .m-ic-bull   { background:#3d1515; color:#f85149; }
+    .m-ic-bear   { background:#0d2a1a; color:#3fb950; }
     .m-ic-neut   { background:var(--bg3); color:var(--muted); }
     .m-inst-row  { display:flex; justify-content:space-between; align-items:center;
                    padding:.18rem 0; border-bottom:1px solid var(--bg3);
                    font-size:.74rem; }
     .m-inst-row:last-child { border-bottom:none; }
     .m-inst-date { color:var(--dim); font-size:.68rem; }
-    .m-inst-pos  { color:var(--green); font-weight:600; }
-    .m-inst-neg  { color:var(--red);   font-weight:600; }
+    .m-inst-pos  { color:var(--red);   font-weight:600; }
+    .m-inst-neg  { color:var(--green); font-weight:600; }
     .m-inst-zero { color:var(--dim); }
 
     /* ── Mobile news section ── */
@@ -353,17 +353,17 @@
     .score-badge { display:inline-block; min-width:1.8rem; text-align:center;
                    font-size:.65rem; font-weight:800; padding:.06rem .28rem;
                    border-radius:4px; margin-right:.15rem; vertical-align:middle; }
-    .score-s3  { background:#071a10; color:#3fb950; border:1px solid #238636; }
-    .score-s2  { background:#0d2a1a; color:#3fb950; }
-    .score-s1  { background:#1a2b1a; color:#7ee787; }
+    .score-s3  { background:#3d1515; color:#f85149; border:1px solid #b22222; }
+    .score-s2  { background:#3d1515; color:#f85149; }
+    .score-s1  { background:#2d1515; color:#ff8888; }
     .score-s0  { background:var(--bg3); color:var(--dim); }
-    .score-sm1 { background:#2d1515; color:#f85149; }
-    .score-sm2 { background:#3d1515; color:#f85149; }
+    .score-sm1 { background:#1a2b1a; color:#7ee787; }
+    .score-sm2 { background:#0d2a1a; color:#3fb950; }
     /* ── Signal chips ── */
     .sig-chip { display:inline-block; font-size:.65rem; font-weight:700;
                 padding:.08rem .3rem; border-radius:4px; white-space:nowrap; margin:.08rem .08rem 0 0; }
-    .sig-bull { background:#0d2a1a; color:#3fb950; }
-    .sig-bear { background:#3d1515; color:#f85149; }
+    .sig-bull { background:#3d1515; color:#f85149; }
+    .sig-bear { background:#0d2a1a; color:#3fb950; }
     .sig-warn { background:#2d1f0e; color:#e3b341; }
     /* ── Fair Value mini panel ── */
     .fv-mini-wrap { background:var(--bg3); border-radius:6px;
@@ -374,8 +374,8 @@
                     font-size:.74rem; padding:.1rem 0; }
     .fv-mini-m    { color:var(--dim); font-size:.65rem; min-width:3.2rem; font-weight:600; }
     .fv-mini-p    { font-weight:700; color:#d2a8ff; flex:1; }
-    .fv-mini-up   { color:#3fb950; font-size:.7rem; }
-    .fv-mini-dn   { color:#f85149; font-size:.7rem; }
+    .fv-mini-up   { color:#f85149; font-size:.7rem; }
+    .fv-mini-dn   { color:#3fb950; font-size:.7rem; }
     .fv-mini-na   { color:var(--dim); font-size:.7rem; }
 
     /* ── Sortable metric rectangles ── */
@@ -400,23 +400,6 @@
                   text-overflow:ellipsis; white-space:nowrap; flex:1; }
 
 
-    /* ── Taiwan market color overrides (red=bull/buy, green=bear/sell) ── */
-    .tw-card .pos        { color:var(--red)   !important; }
-    .tw-card .neg        { color:var(--green) !important; }
-    .tw-card .price-up   { color:var(--red)   !important; }
-    .tw-card .price-dn   { color:var(--green) !important; }
-    .tw-card .rsi-hot  { background:#0d2a1a !important; color:var(--green) !important; }
-    .tw-card .rsi-cold { background:#3d1515 !important; color:var(--red)   !important; }
-    .tw-card .macd-bull  { color:var(--red)   !important; }
-    .tw-card .macd-bear  { color:var(--green) !important; }
-    .tw-card .sig-chip.sig-bull { background:#3d1515 !important; color:var(--red)   !important; }
-    .tw-card .sig-chip.sig-bear { background:#0d2a1a !important; color:var(--green) !important; }
-    .tw-card .rec-badge.rec-strong-buy, .tw-card .rec-badge.rec-buy { background:#3d1515 !important; color:var(--red) !important; }
-    .tw-card .rec-badge.rec-sell, .tw-card .rec-badge.rec-under    { background:#0d2a1a !important; color:var(--green) !important; }
-    .tw-card .score-s3,.tw-card .score-s2 { background:#3d1515 !important; color:var(--red)   !important; }
-    .tw-card .score-s1  { background:#2d1515 !important; color:#ff8888     !important; }
-    .tw-card .score-sm1 { background:#1a2b1a !important; color:#7ee787     !important; }
-    .tw-card .score-sm2 { background:#0d2a1a !important; color:var(--green) !important; }
 
     /* ── Section index bar ── */
     .idx-bar {
@@ -1260,13 +1243,13 @@ function renderCards(results) {
           <span class="rec-badge ${recClass(r.recommendation)} sort-metric" onclick="mSortByCol('rec')">${r.recommendation}${_mSortIcon('rec')}</span>
           ${(r.signals||[]).length ? mScoreBadge(r.momentum_score) + (r.signals||[]).map(s=>`<span class="sig-chip sig-${s.type}">${s.text}</span>`).join("") : ""}
           ${r.rating_change ? `<span title="${esc(r.rating_change.summary)}" style="font-size:.65rem;font-weight:700;
-            color:${r.rating_change.kind==='up'?'#3fb950':r.rating_change.kind==='down'?'#f85149':'#58a6ff'};">
+            color:${r.rating_change.kind==='up'?'#f85149':r.rating_change.kind==='down'?'#3fb950':'#58a6ff'};">
             ${esc(r.rating_change.label)}</span>` : ''}
         </div>
 
         <div class="card-price sort-price-area" onclick="mSortByCol('chg')">
           <span class="price-now">${r.current_price_fmt}</span>${mPriceArrow(r.symbol, r.current_price)}
-          <span style="font-size:.85rem;font-weight:600;color:${r.day_chg_pct==null?'#8b949e':r.is_taiwan?(r.day_chg_pct>=0?'#f85149':'#3fb950'):(r.day_chg_pct>=0?'#3fb950':'#f85149')};">
+          <span style="font-size:.85rem;font-weight:600;color:${r.day_chg_pct==null?'#8b949e':r.day_chg_pct>=0?'#f85149':'#3fb950'};">
             ${r.day_change_fmt||''} (${r.day_chg_pct_fmt||''})${_mSortIcon('chg')}
           </span>
           <span class="price-target ${upCls}" onclick="event.stopPropagation();mSortByCol('upside')">${r.target_price_fmt} ${upTxt}${_mSortIcon('upside')}</span>
@@ -1286,7 +1269,7 @@ function renderCards(results) {
             <span class="metric-val" style="font-size:.75rem;color:#58a6ff;font-weight:700;">
               ${r.kd_k!=null?`K:${r.kd_k} D:${r.kd_d}`:"N/A"}
             </span>
-            ${r.kd_label?`<span style="font-size:.62rem;font-weight:700;color:${r.kd_cls==='kd-over'?'var(--green)':r.kd_cls==='kd-hot'?'var(--red)':r.kd_cls==='kd-tw-bull'?'var(--red)':r.kd_cls==='kd-tw-bear'?'var(--green)':'var(--yellow)'}">${r.kd_label}</span>`:""}
+            ${r.kd_label?`<span style="font-size:.62rem;font-weight:700;color:${r.kd_cls==='kd-over'?'var(--red)':r.kd_cls==='kd-hot'?'var(--green)':r.kd_cls==='kd-tw-bull'?'var(--red)':r.kd_cls==='kd-tw-bear'?'var(--green)':'var(--yellow)'}">${r.kd_label}</span>`:""}
           </div>
           <div class="metric sort-metric" onclick="mSortByCol('52w')">
             <span class="metric-label">距52W高${_mSortIcon('52w')}</span>
@@ -1583,8 +1566,8 @@ function mPriceArrow(sym, curr) {
   const pct  = Math.abs(diff) / prev;
   if (pct < 0.00005) return '<span style="color:#8b949e;font-size:.85rem;">●</span>';
   const big  = pct >= 0.01;
-  if (diff > 0) return `<span style="color:#3fb950;font-size:1rem;font-weight:700;">${big?'↑↑':'↑'}</span>`;
-  return         `<span style="color:#f85149;font-size:1rem;font-weight:700;">${big?'↓↓':'↓'}</span>`;
+  if (diff > 0) return `<span style="color:#f85149;font-size:1rem;font-weight:700;">${big?'↑↑':'↑'}</span>`;
+  return         `<span style="color:#3fb950;font-size:1rem;font-weight:700;">${big?'↓↓':'↓'}</span>`;
 }
 
 function rsiCls(v) {
