@@ -9,21 +9,23 @@ A full-stack web application for analysing US and Taiwan stocks, options, and fi
 1. [Architecture Overview](#architecture-overview)
 2. [Features](#features)
 3. [Prerequisites](#prerequisites)
-4. [External APIs & Keys](#external-apis--keys)
-5. [Directory Structure](#directory-structure)
-6. [Local Development Setup](#local-development-setup)
-7. [Production Deployment (VM)](#production-deployment-vm)
+4. [DNS Setup](#dns-setup)
+5. [External APIs & Keys](#external-apis--keys)
+6. [Directory Structure](#directory-structure)
+7. [Local Development Setup](#local-development-setup)
+8. [Production Deployment (VM)](#production-deployment-vm)
    - [Oracle Cloud ARM64 (Primary)](#oracle-cloud-arm64-primary)
    - [GCP e2-micro (Mirror)](#gcp-e2-micro-mirror)
-8. [Nginx Configuration](#nginx-configuration)
-9. [Systemd Service](#systemd-service)
-10. [Environment Variables (.env)](#environment-variables-env)
-11. [gunicorn_config.py Reference](#gunicorn_configpy-reference)
-12. [Caching Architecture](#caching-architecture)
-13. [Video Pages & Gemini AI](#video-pages--gemini-ai)
-14. [Pages & Routes Reference](#pages--routes-reference)
-15. [Updating / Re-deploying](#updating--re-deploying)
-16. [Troubleshooting](#troubleshooting)
+9. [Nginx Configuration](#nginx-configuration)
+10. [Systemd Service](#systemd-service)
+11. [Environment Variables (.env)](#environment-variables-env)
+12. [gunicorn_config.py Reference](#gunicorn_configpy-reference)
+13. [Caching Architecture](#caching-architecture)
+14. [Video Pages & Gemini AI](#video-pages--gemini-ai)
+15. [Pages & Routes Reference](#pages--routes-reference)
+16. [Annual Maintenance — Calendar Data](#annual-maintenance--calendar-data)
+17. [Updating / Re-deploying](#updating--re-deploying)
+18. [Troubleshooting](#troubleshooting)
 
 ---
 
@@ -51,8 +53,8 @@ Two live deployments:
 
 | VM | Provider | Hostname | Workers | TW Real-time (Shioaji) |
 |----|----------|----------|---------|------------------------|
-| Oracle ARM64 A1 (6 GB RAM) | Oracle Cloud | stocktool.mooo.com | 4 | Yes |
-| GCP e2-micro (1 GB RAM) | Google Cloud | mystocks.mooo.com | 1 | No (yfinance fallback) |
+| Oracle ARM64 A1 (6 GB RAM) | Oracle Cloud | your-oracle-domain.example.com | 4 | Yes |
+| GCP e2-micro (1 GB RAM) | Google Cloud | your-gcp-domain.example.com | 1 | No (yfinance fallback) |
 
 ---
 
@@ -85,8 +87,62 @@ All video pages: YouTube RSS feed → page scrape → Gemini 2.5-flash AI summar
 | Nginx | 1.18+ | Reverse proxy + SSL termination |
 | Certbot | any | Let's Encrypt TLS certificates |
 | Git | 2.x | Pulling updates from GitHub |
+| A domain name | — | Required for HTTPS — see DNS Setup below |
 | Miniforge (Oracle) | latest | ARM64 conda — some packages need ARM wheels |
 | venv (GCP/local) | stdlib | Standard Python virtual environment |
+
+---
+
+## DNS Setup
+
+You need a **domain name** that points to your VM's public IP before you can obtain an HTTPS certificate with Certbot. You can use a free dynamic DNS service or a paid registrar.
+
+### Option A: Free DNS — mooo.com (freedns.afraid.org)
+
+1. Go to https://freedns.afraid.org and create a free account
+2. Click **Subdomains** → **Add a subdomain**
+3. Choose a hostname (e.g. `mystocktool`) and a free parent domain (e.g. `mooo.com`)
+4. Enter your VM's **public IP address** in the Destination field
+5. Save — your domain is now `yourname.mooo.com`
+6. Repeat for your second VM if you have one (e.g. `mystocktool2.mooo.com`)
+
+### Option B: Free DNS — DuckDNS
+
+1. Go to https://www.duckdns.org and sign in with GitHub/Google
+2. Enter a subdomain name → click **add domain**
+3. Your domain is `yourname.duckdns.org`
+4. Update the IP to your VM's public IP on that page
+
+### Option C: Paid domain (Namecheap, Google Domains, etc.)
+
+1. Purchase a domain from any registrar
+2. In the DNS settings, add an **A record** pointing to your VM's public IP:
+   ```
+   Type: A
+   Name: @  (or a subdomain like "stock")
+   Value: <your VM public IP>
+   TTL: 300
+   ```
+
+### Finding your VM's public IP
+
+- **Oracle Cloud:** Compute → Instances → your instance → Public IP address
+- **GCP:** Compute Engine → VM instances → External IP column
+
+### After DNS is set up
+
+Verify the domain resolves before running Certbot:
+```bash
+ping your-domain.example.com
+# Should resolve to your VM's IP
+```
+
+Then run Certbot to get a free HTTPS certificate:
+```bash
+sudo certbot --nginx -d your-domain.example.com
+```
+
+> **Note:** Free dynamic DNS subdomains (mooo.com, duckdns.org) are fully supported by Let's Encrypt / Certbot.
 
 ---
 
@@ -208,7 +264,7 @@ open http://localhost:5050
 
 ```bash
 # 1. SSH into the VM
-ssh -i your-ssh-key.key ubuntu@stocktool.mooo.com
+ssh -i your-ssh-key.key ubuntu@your-oracle-domain.example.com
 
 # 2. Install Miniforge (ARM64 conda — required for shioaji ARM wheels)
 wget https://github.com/conda-forge/miniforge/releases/latest/download/Miniforge3-Linux-aarch64.sh
@@ -233,7 +289,7 @@ sudo apt update && sudo apt install -y nginx certbot python3-certbot-nginx
 # 7. Configure Nginx (see Nginx section below)
 
 # 8. Obtain SSL certificate
-sudo certbot --nginx -d stocktool.mooo.com
+sudo certbot --nginx -d your-oracle-domain.example.com
 
 # 9. Create systemd service (see Systemd section below)
 sudo systemctl daemon-reload
@@ -276,16 +332,16 @@ def post_fork(server, worker):
 
 ```bash
 # 1. SSH into the instance
-ssh -i ~/.ssh/google_compute_engine 34.27.24.0
+ssh -i ~/.ssh/google_compute_engine YOUR_GCP_IP
 # or: gcloud compute ssh --zone=us-central1-a INSTANCE_NAME
 
 # 2. Install dependencies
 sudo apt update && sudo apt install -y python3-venv python3-pip nginx certbot python3-certbot-nginx git
 
 # 3. Create service user and clone repo
-sudo useradd -m wapertech
-sudo -u wapertech bash -c "
-  cd /home/wapertech &&
+sudo useradd -m youruser
+sudo -u youruser bash -c "
+  cd /home/youruser &&
   git clone https://github.com/wapert/stock-tool.git &&
   cd stock-tool &&
   python3 -m venv venv &&
@@ -293,10 +349,10 @@ sudo -u wapertech bash -c "
 "
 
 # 4. Create .env (ALPACA + GEMINI only; skip SHIOAJI on GCP)
-sudo -u wapertech nano /home/wapertech/stock-tool/.env
+sudo -u youruser nano /home/youruser/stock-tool/.env
 
 # 5. Configure Nginx and get SSL cert
-sudo certbot --nginx -d mystocks.mooo.com
+sudo certbot --nginx -d your-gcp-domain.example.com
 
 # 6. Create systemd service and start
 sudo systemctl daemon-reload
@@ -313,7 +369,7 @@ Create `/etc/nginx/sites-available/stocktool`:
 ```nginx
 server {
     listen 80;
-    server_name stocktool.mooo.com;   # Change to your domain
+    server_name your-domain.example.com;   # Replace with your own domain
 
     location / {
         proxy_pass         http://127.0.0.1:5050;
@@ -363,10 +419,10 @@ Description=Stock Analysis Tool
 After=network.target
 
 [Service]
-User=wapertech
-WorkingDirectory=/home/wapertech/stock-tool
-Environment="PATH=/home/wapertech/stock-tool/venv/bin"
-ExecStart=/home/wapertech/stock-tool/venv/bin/gunicorn app:app \
+User=youruser
+WorkingDirectory=/home/youruser/stock-tool
+Environment="PATH=/home/youruser/stock-tool/venv/bin"
+ExecStart=/home/youruser/stock-tool/venv/bin/gunicorn app:app \
     --bind 127.0.0.1:5050 --workers 1 --timeout 120
 Restart=always
 
@@ -545,13 +601,150 @@ On page load, `_resumePending()` reads the key and resumes polling if an analysi
 
 ---
 
+## Annual Maintenance — Calendar Data
+
+The calendar page combines **auto-calculated** events (works forever) with **year-specific** data stored in `static/calendar_data.json`. The JSON file currently covers 2025–2027. Each January, add the new year's data so the calendar stays current.
+
+### What is auto-calculated (no action needed)
+
+| Data | Rule |
+|------|------|
+| US market holidays | Computed from fixed rules (MLK = 3rd Monday Jan, Easter formula, etc.) |
+| TAIFEX settlement dates | 3rd Wednesday of each month, shifted back if it falls on a TW holiday |
+| Taiwan earnings deadlines | Always Mar 31 / May 15 / Aug 14 / Nov 14 |
+
+### What needs annual update (add to `calendar_data.json` each January)
+
+| Data | Source | Frequency |
+|------|--------|-----------|
+| FOMC meeting dates | [federalreserve.gov](https://www.federalreserve.gov/monetarypolicy/fomccalendars.htm) | Released ~12 months ahead |
+| Taiwan market holidays | [TWSE holiday announcement](https://www.twse.com.tw/zh/products/holiday/holiday.html) | Published each October for next year |
+| Taiwan CBC meeting dates | [cbc.gov.tw](https://www.cbc.gov.tw/tw/cp-1046-208610-A0053-1.html) | Published quarterly |
+
+### Step-by-step update guide
+
+#### 1. Open the calendar data file
+
+```bash
+# On your local machine (then push via git):
+nano stock_app/static/calendar_data.json
+```
+
+#### 2. Add FOMC data for the new year
+
+Go to https://www.federalreserve.gov/monetarypolicy/fomccalendars.htm and find the schedule for the new year. Each meeting is a two-day event; the **second day** is the announcement day.
+
+Meetings with a dot plot (★) occur in March, June, September, December.
+
+Add a new key under `"fomc"`:
+
+```json
+"fomc": {
+  "2027": [ ... existing ... ],
+  "2028": [
+    {"start": "2028-01-25", "end": "2028-01-26", "dot": false},
+    {"start": "2028-03-19", "end": "2028-03-20", "dot": true},
+    {"start": "2028-04-25", "end": "2028-04-26", "dot": false},
+    {"start": "2028-06-13", "end": "2028-06-14", "dot": true},
+    {"start": "2028-07-25", "end": "2028-07-26", "dot": false},
+    {"start": "2028-09-19", "end": "2028-09-20", "dot": true},
+    {"start": "2028-10-24", "end": "2028-10-25", "dot": false},
+    {"start": "2028-12-12", "end": "2028-12-13", "dot": true}
+  ]
+}
+```
+
+> **`"dot": true`** marks meetings that include the Summary of Economic Projections (dot plot). These are always the March / June / September / December meetings.
+
+#### 3. Add Taiwan market holidays for the new year
+
+Go to the [TWSE holiday page](https://www.twse.com.tw/zh/products/holiday/holiday.html) — the announcement for the following year is published each October.
+
+Add a new key under `"tw_holidays"`:
+
+```json
+"tw_holidays": {
+  "2027": { ... existing ... },
+  "2028": {
+    "2028-01-01": "元旦",
+    "2028-01-26": "農曆年封關",
+    "2028-01-27": "春節",
+    "2028-01-28": "春節",
+    "2028-01-29": "春節",
+    "2028-01-30": "春節",
+    "2028-02-28": "和平紀念日",
+    "2028-04-04": "兒童節/清明節",
+    "2028-05-01": "勞動節",
+    "2028-06-08": "端午節",
+    "2028-09-15": "中秋節",
+    "2028-10-10": "國慶日"
+  }
+}
+```
+
+> **Special dates to watch:**
+> - 春節 (Lunar New Year) — date shifts each year; check TWSE announcement
+> - 補假 (make-up holidays) — government announces these; check TWSE announcement
+> - 農曆年封關 / 春節後開盤 — last trading day before and first trading day after CNY
+
+#### 4. Add Taiwan CBC meeting dates for the new year
+
+The CBC holds **four quarterly meetings** per year, typically the third Thursday of March, June, September, and December. Check [cbc.gov.tw](https://www.cbc.gov.tw) for the official schedule.
+
+Add a new key under `"cbc_dates"`:
+
+```json
+"cbc_dates": {
+  "2027": { ... existing ... },
+  "2028": {
+    "2028-03-16": "台灣央行利率決策 (Q1 2028)",
+    "2028-06-15": "台灣央行利率決策 (Q2 2028)",
+    "2028-09-21": "台灣央行利率決策 (Q3 2028)",
+    "2028-12-21": "台灣央行利率決策 (Q4 2028)"
+  }
+}
+```
+
+#### 5. Commit, push, and deploy
+
+```bash
+cd stock_app
+git add static/calendar_data.json
+git commit -m "chore: add 2028 calendar data (FOMC, TW holidays, CBC)"
+git push origin main
+```
+
+Then pull on both VMs (see [Updating / Re-deploying](#updating--re-deploying)).
+
+### Missing year warning
+
+If someone opens the calendar for a year not yet in `calendar_data.json`, the UI automatically shows a warning event:
+
+> ⚠️ 2028 FOMC 資料未更新 — 請至 static/calendar_data.json 新增 2028 年 FOMC 資料
+
+This is a reminder to add data; it does not break other calendar events.
+
+### JSON file structure reference
+
+```
+static/calendar_data.json
+├── fomc
+│   └── "YYYY": [ {start, end, dot}, ... ]   ← 8 meetings per year
+├── tw_holidays
+│   └── "YYYY": { "YYYY-MM-DD": "名稱", ... }
+└── cbc_dates
+    └── "YYYY": { "YYYY-MM-DD": "名稱", ... }   ← 4 entries per year
+```
+
+---
+
 ## Updating / Re-deploying
 
 Push your changes to GitHub, then on each VM:
 
 **Oracle:**
 ```bash
-ssh -i your-key.key ubuntu@stocktool.mooo.com \
+ssh -i your-key.key ubuntu@your-oracle-domain.example.com \
   "cd ~/stock-tool && git pull origin main && \
    kill -9 \$(pgrep -f gunicorn) 2>/dev/null; sleep 1 && \
    nohup ~/miniforge3/bin/gunicorn app:app \
@@ -560,8 +753,8 @@ ssh -i your-key.key ubuntu@stocktool.mooo.com \
 
 **GCP:**
 ```bash
-ssh 34.27.24.0 \
-  "sudo -u wapertech bash -c 'cd /home/wapertech/stock-tool && git pull origin main' && \
+ssh YOUR_GCP_IP \
+  "sudo -u youruser bash -c 'cd /home/youruser/stock-tool && git pull origin main' && \
    sudo systemctl restart stocktool.service"
 ```
 
